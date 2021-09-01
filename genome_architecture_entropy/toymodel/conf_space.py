@@ -48,8 +48,9 @@ def add_noise(xy_coord_mat, amount):
     return noisy_signal
 
 
-def slice(xy_coord_mat, minx, maxx, miny, maxy, sample_n=10000):
-    """This function intersects a set of xy coordinates and records for each point the slices it
+def slice(xy_coord_mat, minx, maxx, miny, maxy, sample_n=1000):
+    """
+    This function intersects a set of xy coordinates and records for each point the slices it
     intersects with. 
     
     The xy-plane is intersected 1000 times by a rectangular shape, a slice, covering the maximum 
@@ -100,13 +101,13 @@ def slice(xy_coord_mat, minx, maxx, miny, maxy, sample_n=10000):
     return seg_mat
 
 
-def ran_conf_space(conf_length, model, deg_range=(0, 10), noise=0.1):
+def ran_conf_space(conf_length, model, deg_range=(0, 181), noise=0.1):
     """This function generates variaions of a model by applying noise and rotation."""
     seg_mats = np.empty((conf_length, 1000, model.shape[1]))
 
     for conf in range(0, conf_length):
-        #mod_model = add_noise(model, noise)
-        #mod_model = rotate(mod_model, np.random.uniform(deg_range))
-        seg_mats[conf,:,:] = slice(model, 0, 10, 0, 10)
+        mod_model = add_noise(model, noise)
+        mod_model = rotate(mod_model, np.random.uniform(*deg_range))
+        seg_mats[conf,:,:] = slice(mod_model, 0, 10, 0, 10)
 
     return seg_mats

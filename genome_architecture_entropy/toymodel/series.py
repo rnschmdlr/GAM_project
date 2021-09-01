@@ -23,10 +23,12 @@ Functions
 import numpy as np
 
 import toymodel.conf_space as cs
+import plotting.plot_small_data as psd
 
 
 def series_conf_space(conf_length, start_coords, end_coords):
-    """Generates an ensemble of specified length between a given star and end state. 
+    """
+    Generates an ensemble of specified length between a given star and end state. 
     
     Each in between realization is a weighted mean between start and end with noise added and sliced
     into a segregation matrix.
@@ -43,7 +45,8 @@ def series_conf_space(conf_length, start_coords, end_coords):
     Return
     ------
     seg_mats : numpy array
-        all segregation matrices stacked vertically"""
+        all segregation matrices stacked vertically
+    """
 
     states = np.array([start_coords, end_coords])
     realizations = np.empty((conf_length, 2, states.shape[2]))
@@ -62,7 +65,8 @@ def series_conf_space(conf_length, start_coords, end_coords):
 
 
 def generate_series(seg_mat, length, prnt=False):
-    """Computes a series of states according to transition probabilities.
+    """
+    Computes a series of states according to transition probabilities.
     
     This function evaluates the similarity of all pairs of states and calculates a normalized 
     distance. A random walk of a time-homogenous markov chain in a finite state space is 
@@ -92,11 +96,11 @@ def generate_series(seg_mat, length, prnt=False):
     dist_mat = np.sum(np.sum(np.abs(all_dist_vect), axis=-1), axis=-1) 
 
     # scale the distances so that the min=0 and max=1
-    dist_temp = dist_mat - np.min(dist_mat[dist_mat!=0])
-    dist_mat = dist_temp / np.max(dist_temp)
+    #dist_temp = dist_mat - np.min(dist_mat[dist_mat!=0])
+    #dist_mat = dist_temp / np.max(dist_temp)
 
     # set self, first and last realization as not reachable
-    np.fill_diagonal(dist_mat, 0)
+    #np.fill_diagonal(dist_mat, 0)
     dist_mat[:,0] = 0
     dist_mat[:,-1] = 0 
 
@@ -128,7 +132,7 @@ def generate_series(seg_mat, length, prnt=False):
 
     if prnt:
         #print('\n degrees: \n', deg_mat, '\n')
-        print('Distance matrix:\n', 1-dist_mat, '\n')
+        print('Distance matrix:\n', dist_mat, '\n')
         print('Probability of walk matrix:\n', prob_mat, '\n')
         #print('Transition probabilies:\n', x_mat, '\n')
         print('x(t) sequence of realizations:\n', series+1)

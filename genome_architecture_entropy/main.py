@@ -20,7 +20,9 @@ import numpy as np
 import pandas as pd
 import seaborn as sns
 import timeit
+import matplotlib.pyplot as plt
 from scipy.spatial import distance
+from scipy import stats
 
 import entropy_measures as em
 import toymodel.conf_space as cs
@@ -28,6 +30,7 @@ import toymodel.series as scs
 import toymodel.trans_probs as tb
 import plotting.plot_large_data as pld
 import plotting.plot_small_data as psd
+import toymodel.stat_evaluation as se
 
 
 def load_data(filename):
@@ -39,7 +42,7 @@ def load_data(filename):
     return seg_mat
 
 
-def toy_models_simple(plot):
+def toy_models_simple(samples=1, plot=True, stats=False):
     """Defines a set of states as coordinates on an xy plane and saves them to 
     a dict for convenient plotting and a stacked array for further operations"""
     closed_state = cs.rotate(np.array([[5.0, 5.0, 5.0, 5.2, 6.1, 7.0, 7.5, 7.0, 6.1, 5.2, 5.0, 5.0, 5.0],
@@ -49,24 +52,27 @@ def toy_models_simple(plot):
                              [0.0, 1.0, 2.0, 2.9, 3.2, 3.8, 5.0, 6.2, 6.8, 7.1, 8.0, 9.0, 10.0]]), 270)
     intermediate_state = np.mean(np.array([closed_state, open_state]), axis=0)
 
-    conf_dict = {'State 1': closed_state,
-                 'State 2': intermediate_state,
-                 'State 3': open_state}
+    conf_arr = np.stack([closed_state, intermediate_state, open_state], axis=0)
+    #conf_arr = np.stack([closed_state, open_state], axis=0)
 
-    conf_arr = np.vstack([cs.ran_conf_space(1, closed_state), 
-                          cs.ran_conf_space(1, intermediate_state), 
-                          cs.ran_conf_space(1, open_state)])
+    if stats:
+        s1 = cs.ran_conf_space(samples, closed_state)
+        s2 = cs.ran_conf_space(samples, open_state)
 
-    conf_arr = np.stack([closed_state, open_state, intermediate_state], axis=0)
+        return s1, s2
     
     if plot:
+        conf_dict = {'State 1': closed_state,
+                     'State 2': intermediate_state,
+                     'State 3': open_state}
         psd.coord(conf_dict, 0, 10, 0, 10)
 
     return conf_arr
 
 
 def toy_model_complex(size, plot):
-    """Defines a model with a beginning and end state and computes in between states
+    """
+    Defines a model with a beginning and end state and computes in between states
     
     Raw xy-coordinates are first normalized then aligned. The in between states are 
     computed using a weighted mean method according to the size of the state or 
@@ -117,20 +123,26 @@ def toy_model_complex(size, plot):
         #psd.plot_xy(states[s], 0, 35, -10, 10)
         psd.coord({'State 0': states[0], 'State end': states[-1]}, 0, 35, -10, 10)
 
-    seg_mats = scs.series_conf_space(size, states[0], states[1])
+    seg_mat = (cs.slice(states[1], 0, 35, -10, 10))
+    je_mat1 = em.all_joint_entropy(seg_mat.T)
+    mi_mat1 = em.mutual_information(je_mat1)
+    dict_entropy = {'MI state end': mi_mat1}
+    #psd.heatmap(dict_entropy, 'JE vs MI', v_max=0)
 
+    seg_mats = scs.series_conf_space(size, states[0], states[1])
+    
     return seg_mats
 
 
 def pipe_je_mi_toy(simple_model, plot=True, prnt_stats=True):
-    """An encapsulation to apply func next_pipe to a collection of states"""
+    """An encapsulation to apply func next_pipe to a collection of states and stack results for plotting"""
 
     def print_stats(array_dict):
         """A helper function to print mean and standart deviation of matrices."""
         np.set_printoptions(suppress=True, precision=2, sign=' ', linewidth=100)
         pd.set_option('display.float_format', lambda x: '%.2f' % x)
 
-        for name, val in array_dict.items():
+        for name, val in array_dict.items(): #known issue: res no longer returned as dict
             print(name, val, sep='\n')
             print(pd.DataFrame(val).describe().loc[['mean', 'std']])
         
@@ -138,7 +150,8 @@ def pipe_je_mi_toy(simple_model, plot=True, prnt_stats=True):
     
 
     def next_pipe(xy_model):
-        """A pipeline to compute the joint entropy and mutual information.
+        """
+        A pipeline to compute the joint entropy and mutual information.
         
         Two different distance measures are used: a segregation by slicing
         and eucledian distance of points. The results are stored in a dictionary
@@ -161,43 +174,57 @@ def pipe_je_mi_toy(simple_model, plot=True, prnt_stats=True):
         mi_mat1 = em.mutual_information(je_mat1)
 
         # Compute entropy measures from distance based input (pw point distance matrix)
-        dist    = distance.cdist(np.stack(xy_model, axis=1), np.stack(xy_model, axis=1))
-        je_mat2 = em.all_joint_entropy(dist)
-        mi_mat2 = em.mutual_information(je_mat2)
+        #dist    = distance.cdist(np.stack(xy_model, axis=1), np.stack(xy_model, axis=1))
+        #je_mat2 = em.all_joint_entropy(dist)
+        #mi_mat2 = em.mutual_information(je_mat2)
 
-        results = {'\nJE of windows': je_mat1, 
-                   '\nJE of distances': je_mat2, 
-                   '\nMI of windows': mi_mat1, 
-                   '\nMI of distances': mi_mat2}
+        #results = {'\nJE of windows': je_mat1, 
+        #           '\nJE of distances': je_mat2, 
+        #           '\nMI of windows': mi_mat1, 
+        #           '\nMI of distances': mi_mat2}
+
+        v_max = np.max(np.concatenate([je_mat1, mi_mat1]))
+        results = np.stack([je_mat1, mi_mat1], axis=0)
                 
-        return results
+        return results, v_max
 
     # Joint entropy and mutual information applied to three-state toy data
-    for states in range(0, simple_model.shape[0]):
-        res = next_pipe(simple_model[states])
+    je_mi = np.empty(shape=(0, 13, 13))
 
-        if plot:
-            psd.heatmap(res, 'State'+str(states+1), mask_shape=(13,13))
-        
+    # stack results
+    for states in range(0, simple_model.shape[0]):
+        res, v_max = next_pipe(simple_model[states])
+        je_mi = np.concatenate([je_mi, res])
+
         if prnt_stats:
             print_stats(res)
 
+    # store to dict to allow for subtitles
+    state = ['JE state 1', 'MI state 1', 'JE state 2', 'MI state 2', 'JE state 3', 'MI state 3'] #np.arange(je_mi.shape[0]) + 1
+    dict_entropy = dict(zip(state, je_mi))
 
-def pipe_trans_entropy(model, series_length, plot=True, prnt=True):
+    if plot:
+        psd.heatmap(dict_entropy, 'JE vs MI', v_max)
+        
+        
+def pipe_trans_entropy(model, series_length, nbin, plot=True, prnt=True):
     """Transfer entropy applied to generated time series data"""
     start = timeit.default_timer()
     
     sequence = scs.generate_series(model, series_length, prnt)
-    probs = tb.bin_probs(model, sequence, nbin=36)
+    probs = tb.bin_probs(model, sequence, nbin=nbin)
     trans_entropy = em.all_transfer_entropy(probs) 
 
     if plot:
-        sns.heatmap(data=pd.DataFrame(trans_entropy).rename(columns=lambda x: str(x)),
+        g = sns.heatmap(data=pd.DataFrame(trans_entropy).rename(columns=lambda x: str(x)),
                 cmap=sns.color_palette("flare", as_cmap=True), 
                 robust=True, 
                 square=True, 
-                linewidths=0, 
-                cbar_kws={"shrink": .5})
+                linewidths=0)
+        g.set(xticklabels=np.arange(1,37,2))#trans_entropy.shape[0]+1))
+        g.set(yticklabels=np.arange(1,36,3))#trans_entropy.shape[0]+1))
+        plt.show(block=False)
+        
 
     if prnt:
         print('\n Trans-Entropy of bins: \n', trans_entropy)  
@@ -223,25 +250,78 @@ def pipe_je_mi_exp_data(file, plot=True, save=True):
     return je_mat, mi_mat
 
 
+def call_je_stats(samples, loc1, loc2):
+    """Helper function that calls statistical tests for 2 loci from a number of samples of the simple model."""
+
+    def je_stats_for_two_loci(s1, s2, bins, samples, bin1, bin2):
+        """This function performs entropy calcualtions for the test cases."""
+        je3_s1 = je3_s2 = je9_s1 = je9_s2 = np.empty(0)
+
+        for states in range(0, s1.shape[0]):
+            je_mat1 = em.all_joint_entropy(s1[states])
+            je_mat2 = em.all_joint_entropy(s2[states])
+
+            je3_s1 = np.concatenate((je3_s1, je_mat1[bin1, :]), axis=0)
+            je3_s2 = np.concatenate((je3_s2, je_mat2[bin1, :]), axis=0)
+
+            je9_s1 = np.concatenate((je9_s1, je_mat1[bin2, :]), axis=0)
+            je9_s2 = np.concatenate((je9_s2, je_mat2[bin2, :]), axis=0)
+
+        je3_s1 = je3_s1.reshape(samples, bins)
+        je3_s2 = je3_s2.reshape(samples, bins)
+
+        je9_s1 = je9_s1.reshape(samples, bins)
+        je9_s2 = je9_s2.reshape(samples, bins)
+
+        return je3_s1, je9_s1, je3_s2, je9_s2
+
+
+    s1, s2 = toy_models_simple(samples, plot=False, stats=True)
+
+    print('Calculating joint entropy...')
+    je_bin1_s1, je_bin2_s1, je_bin1_s2, je_bin2_s2 = je_stats_for_two_loci(s1, s2, bins=s1.shape[2],
+                                                                           samples=samples,
+                                                                           bin1=loc1,
+                                                                           bin2=loc2)
+
+    print('Calculatig means...')
+    all_means = [se.get_means(je) for je in zip(je_bin1_s1, je_bin2_s1, je_bin1_s2, je_bin2_s2)]
+
+    # histogram of joint entropy distribution
+    se.plot_distplot(np.array(all_means), plot=True)
+
+    print('ttest')
+    print(stats.ttest_rel(je_bin1_s1, je_bin1_s2))
+    print(stats.ttest_rel(je_bin2_s1, je_bin2_s2))
+
+    print('effect size')
+    print(se.cohen_d(je_bin1_s1, je_bin1_s2))
+    print(se.cohen_d(je_bin2_s1, je_bin2_s2))
+
+
 if __name__ == '__main__': 
     np.set_printoptions(suppress=True, precision=2, sign=' ', linewidth=150, threshold=500)
 
-    # for testing purposes
-    test_seg = np.array([[[0,1,1,1], [0,1,0,0]], 
-                         [[1,1,1,1], [1,0,0,1]], 
-                         [[1,0,0,1], [1,1,0,0]], 
-                         [[1,1,0,1], [1,1,1,0]]]) 
-
-    # applies joint entropy and mutual information to distance and window sampling of a simple 
+    # applies joint entropy and mutual information to window sampling of a simple 
     # three state TAD model
-    simple_model = toy_models_simple(plot=True)
-    pipe_je_mi_toy(simple_model, plot=True, prnt_stats=True)
-    
-# %% stop
-    # applies transfer entropy to a more complex TAD model: a series of varying length
-    complex_model = toy_model_complex(size=20, plot=True)
-    pipe_trans_entropy(complex_model, series_length=20, plot=True, prnt=True)
+    print('setting simple model...')
+    simple_model = toy_models_simple(plot=True, stats=False)
+    print('calculating entropies...')
+    pipe_je_mi_toy(simple_model, plot=True, prnt_stats=False)
 
+    #print('Statistical evaluation of entropy measures.')
+    #call_je_stats(samples=5, loc1=3, loc2=9)
+
+    # applies transfer entropy to a more complex TAD model: a series of varying length
+    print('setting complex model...')
+    complex_model = toy_model_complex(size=20, plot=True)
+    print('calculating trans entropy...')
+    pipe_trans_entropy(complex_model, series_length=20, nbin=36, plot=True, prnt=True)
+        
     # applies joint entropy and mutual information to experimental GAM data
     file = 'segregation_at_30kb.table'
-    #pipe_je_mi_exp_data(file, plot=True, save=True)
+    print('calculating entropies of ', file)
+    pipe_je_mi_exp_data(file, plot=True, save=False)
+
+# %%
+

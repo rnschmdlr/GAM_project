@@ -30,7 +30,8 @@ import numpy as np
 
 # %% def functions
 def bin_probs(seg_mat, sequence, nbin):
-    """This function slices entries of a stack of segregation matrices into a number of col bins 
+    """
+    This function slices entries of a stack of segregation matrices into a number of col bins 
     that are then given to func alc_probs according to pairwise combinations of sequence 
     elemements where transition probabilities are calculated and returned.
     

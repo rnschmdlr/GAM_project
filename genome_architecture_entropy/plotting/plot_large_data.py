@@ -18,8 +18,8 @@ Requires
 
 Functions
 ---------
-* fast_raster - plots a scare numpy array as a raster using datashader
-* slow_raster - plots a scare numpy array as a raster using seaborn (for speed comparison)
+* fast_raster - plots a numpy array as a raster using datashader
+* slow_raster - plots a numpy array as a raster using seaborn (for speed comparison)
 """
 
 import pandas as pd
@@ -32,7 +32,7 @@ import seaborn as sns
 
 
 def fast_raster(data):
-    """This function plots a scare numpy array as a raster using datashader."""
+    """This function plots a numpy array as a raster using datashader."""
     df = xr.DataArray(data)
     plot = ds.Canvas(plot_width=1000, plot_height=1000, x_range=(350,500), y_range=(350,500))
     agg = plot.raster(df, interpolate='nearest')
@@ -43,7 +43,7 @@ def fast_raster(data):
 
 
 def slow_raster(data):
-    """This function plots a scare numpy array as a raster using seaborn."""
+    """This function plots a numpy array as a raster using seaborn."""
     sns.heatmap(data=pd.DataFrame(data[333:500, 333:500]).rename(columns=lambda x: str(x)),
             cmap=sns.color_palette("flare", as_cmap=True), 
             robust=True, 
