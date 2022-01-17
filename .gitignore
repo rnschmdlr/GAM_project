@@ -1,21 +1,18 @@
 /.DS_Store
 /__pycache__
 
-/documents
+/docs
 /figures
+/md_soft
+/workspace.code-workspace
 
-/inter1_raw.jpg
-/inter2_raw.jpg
-/inter3_raw.jpg
-/start_raw.jpg
-/end_raw.jpg
-/chr19_30kb_matrix.png
-
+/genome_architecture_entropy/config_auto.ini
+/genome_architecture_entropy/toymodel.npy
 /genome_architecture_entropy/data
 /genome_architecture_entropy/__pycache__
-/genome_architecture_entropy/segregation_at_30kb.table_JE.npy
-/genome_architecture_entropy/segregation_at_30kb.table_MI.npy
-/genome_architecture_entropy/tut_data_30kb_JE.npy
-/genome_architecture_entropy/tut_data_30kb_MI.npy
 /genome_architecture_entropy/main_stat.py
 /genome_architecture_entropy/main_simple_plot.py
+
+/genome_architecture_entropy/toymodel/__pycache__
+/genome_architecture_entropy/toymodel/restraints
+/genome_architecture_entropy/toymodel/traceback_md_soft.txt

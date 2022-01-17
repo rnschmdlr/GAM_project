@@ -78,6 +78,16 @@ def all_joint_entropy(seg_mat):
     return je_mat
 
 
+def differential_entropy(seg_mat):
+    windows = seg_mat.shape[1]
+    diff_mat = np.zeros(windows)
+
+    for window in range(0, windows-1):
+        diff_mat[window+1] = shannon_entropy(seg_mat[:,window+1]) - shannon_entropy(seg_mat[:,window])
+
+    return diff_mat
+
+
 def mutual_information(je_mat):
     """Returns the mutual information of a matrix given a joint entropy matrix"""
     nrow = np.shape(je_mat)[0]

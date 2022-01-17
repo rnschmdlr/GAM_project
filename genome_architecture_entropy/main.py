@@ -46,14 +46,13 @@ def toy_models_simple(samples=1, plot=True, stats=False):
     """Defines a set of states as coordinates on an xy plane and saves them to 
     a dict for convenient plotting and a stacked array for further operations"""
     closed_state = cs.rotate(np.array([[5.0, 5.0, 5.0, 5.2, 6.1, 7.0, 7.5, 7.0, 6.1, 5.2, 5.0, 5.0, 5.0],
-                             [1.5, 2.5, 3.5, 4.3, 4.0, 4.1, 5.0, 5.8, 6.0, 5.7, 6.5, 7.5, 8.5]]), 270)
+                                       [1.5, 2.5, 3.5, 4.3, 4.0, 4.1, 5.0, 5.8, 6.0, 5.7, 6.5, 7.5, 8.5]]), 270)
 
     open_state = cs.rotate(np.array([[5.0, 5.0, 5.0, 5.2, 6.1, 7.0, 7.5, 7.0, 6.1, 5.2, 5.0, 5.0, 5.0],
-                             [0.0, 1.0, 2.0, 2.9, 3.2, 3.8, 5.0, 6.2, 6.8, 7.1, 8.0, 9.0, 10.0]]), 270)
+                                     [0.0, 1.0, 2.0, 2.9, 3.2, 3.8, 5.0, 6.2, 6.8, 7.1, 8.0, 9.0, 10.0]]), 270)
     intermediate_state = np.mean(np.array([closed_state, open_state]), axis=0)
 
     conf_arr = np.stack([closed_state, intermediate_state, open_state], axis=0)
-    #conf_arr = np.stack([closed_state, open_state], axis=0)
 
     if stats:
         s1 = cs.ran_conf_space(samples, closed_state)
@@ -65,7 +64,7 @@ def toy_models_simple(samples=1, plot=True, stats=False):
         conf_dict = {'State 1': closed_state,
                      'State 2': intermediate_state,
                      'State 3': open_state}
-        psd.coord(conf_dict, 0, 10, 0, 10)
+        psd.coord(conf_dict, -5, 15, -10, 10)
 
     return conf_arr
 
@@ -169,7 +168,7 @@ def pipe_je_mi_toy(simple_model, plot=True, prnt_stats=True):
         """
 
         # Slice xy testmodel into segregation windows and compute entropy measures
-        seg_mat = (cs.slice(xy_model, 0, 10, 0, 10))
+        seg_mat = cs.slice(xy_model, 0, 10, 0, 10)
         je_mat1 = em.all_joint_entropy(seg_mat.T)
         mi_mat1 = em.mutual_information(je_mat1)
 
@@ -189,7 +188,7 @@ def pipe_je_mi_toy(simple_model, plot=True, prnt_stats=True):
         return results, v_max
 
     # Joint entropy and mutual information applied to three-state toy data
-    je_mi = np.empty(shape=(0, 13, 13))
+    je_mi = np.empty(shape=(0, 36, 36)) #13 for og simple model
 
     # stack results
     for states in range(0, simple_model.shape[0]):
@@ -309,8 +308,8 @@ if __name__ == '__main__':
     print('calculating entropies...')
     pipe_je_mi_toy(simple_model, plot=True, prnt_stats=False)
 
-    #print('Statistical evaluation of entropy measures.')
-    #call_je_stats(samples=5, loc1=3, loc2=9)
+    # print('Statistical evaluation of entropy measures.')
+    # call_je_stats(samples=5, loc1=3, loc2=9)
 
     # applies transfer entropy to a more complex TAD model: a series of varying length
     print('setting complex model...')
@@ -322,6 +321,5 @@ if __name__ == '__main__':
     file = 'segregation_at_30kb.table'
     print('calculating entropies of ', file)
     pipe_je_mi_exp_data(file, plot=True, save=False)
-
 # %%
 

@@ -39,20 +39,23 @@ plt.rc('legend', fontsize=13)    # legend fontsize
 plt.rc('font', size=13)          # controls default text sizes
 
 
-def plot_xy(mat, xmin, xmax, ymin, ymax):
+def plot_xy(mat, xmin, xmax, ymin, ymax, title):
     "This is a simple plotting helper function for xy coordinates."
+    sns.set_theme(style="white") #, rc=custom_params)
     plt.show(block=False)
-    plt.scatter(mat[0], mat[1])
+    plt.plot(mat[0], mat[1], '-ok')
     plt.tick_params(
-        axis='both',          # changes apply to the x-axis
-        which='both',      # both major and minor ticks are affected
         labelleft=False,
         bottom=False,      # ticks along the bottom edge are off
         top=False,         # ticks along the top edge are off
         labelbottom=False)
-    plt.axis([xmin, xmax, ymin, ymax])
+    plt.axis([xmin-0.5, xmax+0.5, ymin-0.5, ymax+0.5])
+    plt.xlabel('x')
+    plt.ylabel('y')
     plt.gca().set_aspect('equal')
+    plt.title(title, loc='left')
     plt.show()
+
 
 def heatmap(dict_arrays, header, v_max):
     """
@@ -71,7 +74,7 @@ def heatmap(dict_arrays, header, v_max):
     """
 
     # Generate a mask for the upper triangle from value shape, k=1 to see diagonal line in heatmap
-    mask = np.triu(np.ones((13,13), dtype=bool), k=0)
+    mask = np.triu(np.ones((36,36), dtype=bool), k=0)
     f, ax = plt.subplots(3, 2, figsize=(13, 15)) # Set up the matplotlib figure
     cmap = sns.cubehelix_palette(start=5.8, rot=-0.4, dark=0.1, light=0.92, as_cmap=True) # greens
     cmap = sns.cubehelix_palette(start=1, rot=-0.55, dark=0.1, light=0.92, as_cmap=True) # blues
@@ -93,39 +96,33 @@ def heatmap(dict_arrays, header, v_max):
     plt.show()
 
 
-def heatmap_og(dict_arrays, header, mask_shape):
+def heatmap_single(array, mask_shape, title):
     """
-    This function plots a set of heatmaps from data stored in a dict.
+    This function plots a heatmap.
     
     The heatmaps are masked at so that only the lower triangle is drawn.
     
     Arguments
     ---------
-    dict_arrays : dict
-        arrays stored in a dict to be unpacked
-    header : string
-        title of the figure
+    array : numpy object
+        data array
     mask_shape : 
         shape of the mask to be applied to the heatmap
     """
 
     # Generate a mask for the upper triangle from value shape, k=1 to see diagonal line in heatmap
     mask = np.triu(np.ones(mask_shape, dtype=bool), k=0)
-    f, ax = plt.subplots(2, 2, figsize=(11, 9)) # Set up the matplotlib figure
     cmap = sns.color_palette("flare", as_cmap=True) # Generate a custom diverging colormap
-
-    for index, (key, value) in enumerate(dict_arrays.items()):
-        # 2d array has to be flattened in order to call it with the dict indices
-        ax.flat[index].set(title=key, xlabel='coordinate index', ylabel='coordinate index')
-        sns.heatmap(value, 
-                    ax=ax.flat[index],
-                    mask=mask, 
-                    cmap=cmap, 
-                    robust=True, 
-                    square=True, 
-                    linewidths=0,)
-
-    f.suptitle(header, x=0.1, ha='left', size='xx-large')
+    #fig, ax = plt.subplot(figsize=(11,9))
+    sns.heatmap(array,
+                mask=mask, 
+                cmap=cmap, 
+                robust=True, 
+                square=True, 
+                linewidths=0,)
+    plt.xticks(np.arange(1, array.shape[0]))
+    plt.yticks(np.arange(1, array.shape[1]))
+    plt.title(title, loc='left')
     plt.show()
 
     return None

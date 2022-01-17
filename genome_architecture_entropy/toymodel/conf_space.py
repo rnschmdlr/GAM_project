@@ -25,6 +25,7 @@ Functions
 import math
 
 import numpy as np
+import matplotlib.pyplot as plt
 import shapely.affinity as sa
 from shapely.geometry import MultiPoint, box
 
@@ -48,7 +49,7 @@ def add_noise(xy_coord_mat, amount):
     return noisy_signal
 
 
-def slice(xy_coord_mat, minx, maxx, miny, maxy, sample_n=1000):
+def slice(xy_coord_mat, xmin, xmax, ymin, ymax, sample_n=1000):
     """
     This function intersects a set of xy coordinates and records for each point the slices it
     intersects with. 
@@ -62,10 +63,10 @@ def slice(xy_coord_mat, minx, maxx, miny, maxy, sample_n=1000):
     ----------
     xy_coord_mat : numpy array
         two row vectors storing x and y coordinates respectively
-    minx : float
-    maxx : float 
-    miny : float 
-    maxy : float 
+    xmin : float
+    xmax : float 
+    ymin : float 
+    ymax : float 
         dimensions of the coordinate system
         
     Return
@@ -73,31 +74,43 @@ def slice(xy_coord_mat, minx, maxx, miny, maxy, sample_n=1000):
     seg_mat : numpy array
         segregation matrix of all points contained within a slice
     """
+    plot = False 
+
+    xmin = np.min(xy_coord_mat[0])
+    xmax = np.max(xy_coord_mat[0])
+    ymin = np.min(xy_coord_mat[1])
+    ymax = np.max(xy_coord_mat[1])
 
     points  = MultiPoint(np.stack(xy_coord_mat, axis=1))
     seg_mat = np.zeros((sample_n, len(points.geoms)))
 
-    loc = (maxy + miny) / 2
-    
-    slice_center = (maxx + minx) / 2
-    slice_maxx = slice_center + maxx * 2
-    slice_minx = slice_center - maxx * 2
-    slice_height = (maxy + np.abs(miny)) / 100 * 5
+    slice_center = (xmax + xmin) / 2
+    slice_xmin = slice_center - xmax * 3
+    slice_xmax = slice_center + xmax * 3
+    slice_height = (ymax + np.abs(ymin)) / 100 * 5 
 
     for iter in range(sample_n):
-        rand_angle  = np.random.uniform(0, 181)
-        rand_y      = np.random.normal(loc, scale=1)
-        slice       = box(slice_minx, 
-                          rand_y - 0.5* slice_height, 
-                          slice_maxx, 
-                          rand_y + 0.5 * slice_height)
-        slice       = sa.rotate(slice, rand_angle, origin='center')
-        #x,y        = slice.exterior.xy
-        #plt.plot(x,y)
+        rand_y     = np.random.uniform(low=ymin, high=ymax)
+        slice_ymin = rand_y - 0.5 * slice_height
+        slice_ymax = rand_y + 0.5 * slice_height
+        slice      = box(slice_xmin, slice_ymin, slice_xmax, slice_ymax)
+
+        org_y      = np.random.uniform(low=ymin, high=ymax)
+        org_x      = np.random.uniform(low=xmin, high=xmax)
+        rand_angle = np.random.uniform(0, 360)
+        slice      = sa.rotate(slice, rand_angle, origin=(org_x, org_y))
+        x,y        = slice.exterior.xy
+
+        if plot:
+            plt.plot(x,y)
+            ax = plt.gca()
+            ax.set_xlim([xmin, xmax])
+            ax.set_ylim([ymin, ymax])
 
         for p in range(len(points.geoms)):
             seg_mat[iter, p] = slice.contains(points[p])
 
+    plt.show()
     return seg_mat
 
 
