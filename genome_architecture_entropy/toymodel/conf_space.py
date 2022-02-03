@@ -49,7 +49,7 @@ def add_noise(xy_coord_mat, amount):
     return noisy_signal
 
 
-def slice(xy_coord_mat, xmin, xmax, ymin, ymax, sample_n=1000):
+def slice(xy_coord_mat, sample_n=100000):
     """
     This function intersects a set of xy coordinates and records for each point the slices it
     intersects with. 
@@ -81,31 +81,45 @@ def slice(xy_coord_mat, xmin, xmax, ymin, ymax, sample_n=1000):
     ymin = np.min(xy_coord_mat[1])
     ymax = np.max(xy_coord_mat[1])
 
+    # plane parameters
+    x_abs = xmax - xmin
+    y_abs = ymax - ymin
+    x_scale = x_abs * 13 / 10
+    y_scale = y_abs * 13 / 10
+    x_offset = 1.5
+    y_offset = 1.5
+
     points  = MultiPoint(np.stack(xy_coord_mat, axis=1))
     seg_mat = np.zeros((sample_n, len(points.geoms)))
 
     slice_center = (xmax + xmin) / 2
-    slice_xmin = slice_center - xmax * 3
-    slice_xmax = slice_center + xmax * 3
+    slice_xmin = slice_center - 3 * xmax
+    slice_xmax = slice_center + 3 * xmax
     slice_height = (ymax + np.abs(ymin)) / 100 * 5 
 
     for iter in range(sample_n):
-        rand_y     = np.random.uniform(low=ymin, high=ymax)
+        # logit-normal bimodal distribution with offset and scaling
+        rand_y     = (y_scale / (1 + np.exp(-2.1 * np.random.normal())) - y_offset)
+
+        # y coordinates for the 'thickness' of a slice
         slice_ymin = rand_y - 0.5 * slice_height
         slice_ymax = rand_y + 0.5 * slice_height
+
         slice      = box(slice_xmin, slice_ymin, slice_xmax, slice_ymax)
 
-        org_y      = np.random.uniform(low=ymin, high=ymax)
-        org_x      = np.random.uniform(low=xmin, high=xmax)
+        # logit-normal bimodal distribution (wider and sless steep fall-off) with offset and scaling
+        rand_x     = (x_scale / (1 + np.exp(-2.1 * np.random.normal())) - x_offset)
         rand_angle = np.random.uniform(0, 360)
-        slice      = sa.rotate(slice, rand_angle, origin=(org_x, org_y))
+
+        # compute rotated slice and final measurement
+        slice      = sa.rotate(slice, rand_angle, origin=(rand_x, rand_y))
         x,y        = slice.exterior.xy
 
         if plot:
             plt.plot(x,y)
             ax = plt.gca()
-            ax.set_xlim([xmin, xmax])
-            ax.set_ylim([ymin, ymax])
+            ax.set_xlim([-10-xmin, 10+xmax])
+            ax.set_ylim([-10-ymin, 10+ymax])
 
         for p in range(len(points.geoms)):
             seg_mat[iter, p] = slice.contains(points[p])
