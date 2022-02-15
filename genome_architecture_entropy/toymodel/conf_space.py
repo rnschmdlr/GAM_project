@@ -25,10 +25,12 @@ Functions
 import math
 
 import numpy as np
+import matplotlib
 import matplotlib.pyplot as plt
+import matplotlib.patches as patches
 import shapely.affinity as sa
 from shapely.geometry import MultiPoint, box
-
+matplotlib.rcParams["figure.dpi"] = 300
 
 def rotate(xy_coord_mat, degree, origin=(5, 5)):
     """This function rotates a set of xy coordinates to a degree around a given origin."""
@@ -76,55 +78,72 @@ def slice(xy_coord_mat, sample_n=100000):
     """
     plot = False 
 
-    xmin = np.min(xy_coord_mat[0])
-    xmax = np.max(xy_coord_mat[0])
-    ymin = np.min(xy_coord_mat[1])
-    ymax = np.max(xy_coord_mat[1])
+    xmin_slice = np.min(xy_coord_mat[0])
+    xmax_slice = np.max(xy_coord_mat[0])
+    ymin_slice = np.min(xy_coord_mat[1])
+    ymax_slice = np.max(xy_coord_mat[1])
 
-    # plane parameters
-    x_abs = xmax - xmin
-    y_abs = ymax - ymin
-    x_scale = x_abs * 13 / 10
-    y_scale = y_abs * 13 / 10
-    x_offset = 1.5
-    y_offset = 1.5
+    width_slice = xmax_slice - xmin_slice
+    height_slice = ymax_slice - ymin_slice
+
+    # larger area to escape boundary effects
+    # sample > slice
+    scale = 1
+    xmin_sample = xmin_slice - scale * width_slice    
+    xmax_sample = xmax_slice + scale * width_slice
+    ymin_sample = ymin_slice - scale * height_slice
+    ymax_sample = ymax_slice + scale * height_slice
+
+    width_sample = xmax_sample - xmin_sample
+    height_sample = ymax_sample - ymin_sample
+
+    sample_center = (xmax_sample + xmin_sample) / 2
+    sample_xmin = sample_center - 3 * width_slice
+    sample_xmax = sample_center + 3 * height_slice
+    sample_height = (ymax_sample + np.abs(ymin_sample)) / 100 * 5 
 
     points  = MultiPoint(np.stack(xy_coord_mat, axis=1))
     seg_mat = np.zeros((sample_n, len(points.geoms)))
 
-    slice_center = (xmax + xmin) / 2
-    slice_xmin = slice_center - 3 * xmax
-    slice_xmax = slice_center + 3 * xmax
-    slice_height = (ymax + np.abs(ymin)) / 100 * 5 
-
     for iter in range(sample_n):
-        # logit-normal bimodal distribution with offset and scaling
-        rand_y     = (y_scale / (1 + np.exp(-2.1 * np.random.normal())) - y_offset)
+        rand_y     = np.random.uniform(low=ymin_sample, high=ymax_sample)
+        slice_ymin = rand_y - 0.5 * sample_height
+        slice_ymax = rand_y + 0.5 * sample_height
+        slice      = box(sample_xmin, slice_ymin, sample_xmax, slice_ymax)
 
-        # y coordinates for the 'thickness' of a slice
-        slice_ymin = rand_y - 0.5 * slice_height
-        slice_ymax = rand_y + 0.5 * slice_height
-
-        slice      = box(slice_xmin, slice_ymin, slice_xmax, slice_ymax)
-
-        # logit-normal bimodal distribution (wider and sless steep fall-off) with offset and scaling
-        rand_x     = (x_scale / (1 + np.exp(-2.1 * np.random.normal())) - x_offset)
-        rand_angle = np.random.uniform(0, 360)
-
-        # compute rotated slice and final measurement
+        rand_x     = np.random.uniform(low=xmin_sample, high=xmax_sample)
+        rand_angle = np.random.uniform(-180, 180)
         slice      = sa.rotate(slice, rand_angle, origin=(rand_x, rand_y))
         x,y        = slice.exterior.xy
 
         if plot:
-            plt.plot(x,y)
+            plt.plot(x,y, linewidth = 0.1, color='k', fillstyle='full', alpha=0.01)
             ax = plt.gca()
-            ax.set_xlim([-10-xmin, 10+xmax])
-            ax.set_ylim([-10-ymin, 10+ymax])
+            ax.set_xlim([xmin_sample - width_sample, xmax_sample + width_sample])
+            ax.set_ylim([ymin_sample - height_sample, ymax_sample + height_sample])
+            ax.set_aspect('equal', 'box')
 
         for p in range(len(points.geoms)):
             seg_mat[iter, p] = slice.contains(points[p])
 
-    plt.show()
+    if plot:
+        sample_area = patches.Rectangle((xmin_sample, ymin_sample), 
+                                        width_sample, height_sample, 
+                                        linewidth=.5, 
+                                        edgecolor='white', 
+                                        facecolor='none', 
+                                        zorder=sample_n)
+
+        slice_area = patches.Rectangle((xmin_slice, ymin_slice), 
+                                        width_slice, height_slice, 
+                                        linewidth=.5, 
+                                        edgecolor='red', 
+                                        facecolor='none', 
+                                        zorder=sample_n)
+        ax.add_patch(slice_area)
+        ax.add_patch(sample_area)
+        plt.show()
+
     return seg_mat
 
 

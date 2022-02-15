@@ -73,7 +73,7 @@ def plot_ensemble(model, mat1, mat2, cosegregation, title, entropy, color_points
 
 
 # %% test sampling distribution
-n_slice = 50000
+n_slice = 100000
 
 xy = np.mgrid[0:10:1, 0:10:1].reshape(2,-1)
 seg_mat = cs.slice(xy, n_slice)
@@ -191,8 +191,8 @@ n_slice = 100000
 seg_mat = cs.slice(new_model, n_slice)
 
 # calculate normalized linkage disequilibrium
-cosegregation = ci.dprime_2d(seg_mat.T.astype(int), seg_mat.T.astype(int))
-cosegregation[cosegregation < 0] = 0
+cosegregation_raw = ci.dprime_2d(seg_mat.T.astype(int), seg_mat.T.astype(int))
+cosegregation = cosegregation_raw[cosegregation_raw < 0] = 0
 
 # calculating shannon-, differential-, joint- entropy and mutual information
 entropy = str(np.around(em.shannon_entropy(seg_mat), 2))
@@ -221,7 +221,10 @@ mi_mat = mi_mat / mi_mat.max()
 
 diff = (cosegregation - mi_mat) / cosegregation
 
-cosegregation_sum = np.sum(cosegregation, axis=0)
+cosegregation_raw = cosegregation_raw - np.diag(np.diag(cosegregation_raw))
+cosegregation_raw = cosegregation_raw - cosegregation_raw.min()
+cosegregation_raw = cosegregation_raw / cosegregation_raw.max()
+cosegregation_sum = np.sum(cosegregation_raw, axis=0)
 color_points = [1 - np.abs(item / np.max(cosegregation_sum)) for item in cosegregation_sum]
 
 plot_ensemble(new_model, 

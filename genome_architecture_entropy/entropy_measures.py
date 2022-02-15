@@ -23,6 +23,7 @@ Functions
 """
 
 import numpy as np
+import warnings
     
 
 def shannon_entropy(seg_mat):
@@ -136,3 +137,25 @@ def all_transfer_entropy(trans_probs):
 
     return te_mat
             
+
+def npmi_2d_fast(region1, region2):
+    """Calculate an NPMI matrix between two regions
+    Takes a list of :ref:`regions <regions>` and calculates the full NPMI
+    matrix for all possible combinations of loci.
+    This function uses vectorized numpy functions and is therefore much faster
+    than npmi_2d_slow and is the recommended function for NPMI calculation.
+    However, it is less readable and therefore potentially more difficult to
+    debug.
+    :param list regions: List of :ref:`regions <regions>`.
+    :returns: :ref:`proximity matrix <proximity_matrices>` giving the npmi \
+            of all possible combinations of windows within the different regions.
+    """
+
+    M = region1.shape[1]
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        pXY = region1.dot(region2.T) / M
+        pXpY = (region1.sum(1).reshape(-1, 1) / M) * (region2.sum(1) / M)
+        pmi = np.log2(pXY / pXpY)
+        npmi = pmi / -np.log2(pXY)
+    return npmi
