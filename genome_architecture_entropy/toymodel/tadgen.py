@@ -2,6 +2,16 @@
 import numpy as np
 import pandas as pd
 import subprocess
+from pathlib import Path
+
+path_cwd        = Path.cwd()
+path_restraints = path_cwd / 'md_soft/restraints/'
+path_out        = path_cwd / 'md_soft/out/'
+path_config     = path_cwd / 'md_soft/config.ini'
+path_ini_struct = path_cwd / 'md_soft/initial_structure.pdb'
+
+path_run_mdsoft = path_cwd.parents[2] / 'md_soft/run.py'
+
 
 
 def init_tads(seeds):
@@ -19,18 +29,20 @@ def init_tads(seeds):
 def write_tads_to_file(tads, num, prnt=False):
     # convert to list and print to spec
     restraints = tads.tolist()
-    with open('/Users/pita/Documents/Rene/Bioinformatics Master/GAM_project/genome_architecture_entropy/toymodel/restraints/restraint%d.rst' % (num), 'w') as f:
+    file_restraint = str(path_restraints) + '/restraint%d.rst' % (num)
+
+    with open(file_restraint, 'w') as f:
         for tad in restraints:
             tad.insert(0, ':')
             tad.insert(2, ' :')
-            #tad.append(' H')
+            #tad.append(' >>')
             print(*tad, sep='', end='\n', file=f)
             if prnt == True: print(*tad, sep='')
 
-    return 0
+    return None
 
 
-def generate_boundary_sequence(tads, lbound=0, rbound=36):
+def generate_boundary_sequence(tads, lbound=1, rbound=35):
     flag = 0 #const
     cond = True
     iterations = 0
@@ -42,7 +54,7 @@ def generate_boundary_sequence(tads, lbound=0, rbound=36):
             cond = False
         flag = 0 # reset flag
 
-        write_tads_to_file(tads, iterations, prnt=True)
+        write_tads_to_file(tads, iterations, prnt=False)
 
         #inner loop: each tad, boundary conditions
         for tad in range(tads.shape[0]):
@@ -97,36 +109,45 @@ def generate_boundary_sequence(tads, lbound=0, rbound=36):
 
 def run_sim(series_len, chain_len):
     # run md_soft with args: python run.py -c config.ini
-    cmd = 'python /Users/pita/Documents/Rene/Bioinformatics\ Master/GAM_project/md_soft/md_soft/run.py -c /Users/pita/Documents/Rene/Bioinformatics\ Master/GAM_project/md_soft/md_soft/config.ini'
+    cmd = ['python', str(path_run_mdsoft), '-c', str(path_config)]
+    cmd = 'python ' + str(path_run_mdsoft) + ' -c ' + str(path_config)
+
     global xy_series 
     xy_series = np.empty((series_len, chain_len, 2))
 
     for state in range(series_len):
-        with open('/Users/pita/Documents/Rene/Bioinformatics Master/GAM_project/md_soft/md_soft/config.ini', 'r') as config_file:
+        # replace restraints and input structure paths in config file
+        with open(path_config, 'r') as config_file:
             list_of_lines = config_file.readlines()
-        list_of_lines[18] = 'HR_RESTRAINTS_PATH = /Users/pita/Documents/Rene/Bioinformatics Master/GAM_project/genome_architecture_entropy/toymodel/restraints/restraint%d.rst\n' % (state)
-        with open('/Users/pita/Documents/Rene/Bioinformatics Master/GAM_project/md_soft/md_soft/config.ini', 'w') as config_file:
+            
+        list_of_lines[18] = 'HR_RESTRAINTS_PATH =' + str(path_restraints) + '/restraint%d.rst\n' % (state)
+        list_of_lines[2] = 'INITIAL_STRUCTURE_PATH =' + str(path_ini_struct) + '\n'
+
+        if state == 1:
+            list_of_lines[2] = 'INITIAL_STRUCTURE_PATH =' + str(path_out) + '/min_struct.pdb\n'
+
+        with open(path_config, 'w') as config_file:
             config_file.writelines(list_of_lines)
 
+        # extract xy coordinates
         if state > -1:
-            # start md_soft subprocess to start simulation
-            proc = subprocess.check_output(cmd, shell=True, universal_newlines=True)
-            print(proc)
+            subprocess.run(cmd, shell=True)
 
-            #proc = subprocess.check_call(cmd, shell=True)
-
-            # catch output
-            filename = '/Users/pita/Documents/Rene/Bioinformatics Master/GAM_project/md_soft/md_soft/example_data/example_result/initial_structure_min.pdb'
+            # remove cols of no interest for numpy array creation
             colspecs = [(0, 6), (6, 11), (12, 16), (16, 17), (17, 20), (21, 22), (22, 26),
                         (26, 27), (30, 38), (38, 46), (46, 54), (54, 60), (60, 66), (76, 78),
                         (78, 80)]
             cols = ['x','y']
             names = ['ATOM', 'serial', 'name', 'altloc', 'resname', 'chainid', 'resseq',
                     'icode', 'x', 'y', 'z', 'occupancy', 'tempfactor', 'element', 'charge']
-            pdb = pd.read_fwf(filename, names=names, skiprows=[0], colspecs=colspecs, usecols=lambda x: x  in cols).dropna()
+            file = path_out / 'min_struct.pdb'
+            pdb = pd.read_fwf(file, names=names, skiprows=[0], colspecs=colspecs, usecols=lambda x: x  in cols).dropna()
             
             # append to 3d numpy array
             xy_series[state,:,:] = np.array(pdb, dtype=float)
+
+            # parse into new initial structure
+
 
     return xy_series
 
@@ -142,14 +163,14 @@ if __name__ == '__main__':
     #|        ||       ||   ||    |
     # stop when no ops possible
 
-    tad_seeds = np.array([4, 20]) 
+    tad_seeds = np.array([5, 12, 21, 29, 32]) 
     chain_len = 36 # need to change first_initial_structure.pdb first!
     tads_initial = init_tads(tad_seeds)
     series_len = generate_boundary_sequence(tads_initial, rbound=chain_len)
+    series_len = 10
     run_sim(series_len, chain_len)
 
-    # save numpy array
-    path = '/Users/pita/Documents/Rene/Bioinformatics Master/GAM_project/genome_architecture_entropy/toymodel'
-    np.save(path+'.npy', xy_series)
+    file = path_out / 'toymodel.npy'
+    np.save(file, xy_series)
 
 # %%
