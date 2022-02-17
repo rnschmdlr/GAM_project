@@ -9,13 +9,18 @@
 /genome_architecture_entropy/config_auto.ini
 /genome_architecture_entropy/toymodel.npy
 /genome_architecture_entropy/data
-/genome_architecture_entropy/__pycache__
+
 /genome_architecture_entropy/main_stat.py
 /genome_architecture_entropy/main_simple_plot.py
 
-/genome_architecture_entropy/toymodel/__pycache__
-/genome_architecture_entropy/toymodel/restraints
-/genome_architecture_entropy/toymodel/traceback_md_soft.txt
-genome_architecture_entropy/toymodel/__pycache__/conf_space.cpython-38.pyc
+/genome_architecture_entropy/toymodel/__pycache__/
+/genome_architecture_entropy/toymodel/md_soft/out
+/genome_architecture_entropy/toymodel/md_soft/restraints
+
 
 sampling-frequency.png
+genome_architecture_entropy/toymodel/md_soft/initial_structure copy.pdb
+genome_architecture_entropy/toymodel/__pycache__/conf_space.cpython-38.pyc
+genome_architecture_entropy/toymodel/__pycache__/__init__.cpython-38.pyc
+genome_architecture_entropy/toymodel/config_auto.ini
+genome_architecture_entropy/__pycache__/entropy_measures.cpython-38.pyc
