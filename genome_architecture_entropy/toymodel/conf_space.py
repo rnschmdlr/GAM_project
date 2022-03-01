@@ -99,7 +99,7 @@ def slice(xy_coord_mat, sample_n=100000):
 
     sample_center = (xmax_sample + xmin_sample) / 2
     sample_xmin = sample_center - 3 * width_slice
-    sample_xmax = sample_center + 3 * height_slice
+    sample_xmax = sample_center + 3 * width_slice
     sample_height = (ymax_sample + np.abs(ymin_sample)) / 100 * 5 
 
     points  = MultiPoint(np.stack(xy_coord_mat, axis=1))
