@@ -12,7 +12,7 @@ path_restraints = str(path_cwd / 'md_soft/restraints/')
 path_out        = str(path_cwd / 'md_soft/out/')
 path_config     = str(path_cwd / 'md_soft/config.ini')
 path_ini_struct = str(path_cwd / 'md_soft/initial_structure.pdb')
-path_run_mdsoft = str(path_cwd.parents[2] / 'md_soft/run.py')
+path_run_mdsoft = str(path_cwd.parents[1] / 'md_soft/run.py')
 
 
 
@@ -140,12 +140,19 @@ def translocate_xy(pdb_input, pdb_output):
 
         
 def run_sim(series_len, chain_len):
+    colspecs = [(0, 6), (6, 11), (12, 16), (16, 17), (17, 20), (21, 22), (22, 26),
+                    (26, 27), (30, 38), (38, 46), (46, 54), (54, 60), (60, 66), (76, 78), (78, 80)]
+    cols = ['x','y']
+    names = ['ATOM', 'serial', 'name', 'altloc', 'resname', 'chainid', 'resseq',
+                'icode', 'x', 'y', 'z', 'occupancy', 'tempfactor', 'element', 'charge']
+    path_min_pdb = path_out + '/min_struct.pdb'
+
     # run md_soft with args: python run.py -c config.ini
     cmd = ['python', path_run_mdsoft, '-c', path_config]
     cmd = 'python ' + path_run_mdsoft + ' -c ' + path_config
 
     global xy_series 
-    xy_series = np.empty((series_len, chain_len, 2))
+    xy_series = np.empty((series_len+1, chain_len, 2))
 
     for state in range(series_len):
         # replace restraints and input structure paths in config file
@@ -153,34 +160,28 @@ def run_sim(series_len, chain_len):
             list_of_lines = config_file.readlines()
 
         list_of_lines[18] = 'HR_RESTRAINTS_PATH =' + path_restraints + '/restraint%d.rst\n' % (state)
-        list_of_lines[2] = 'INITIAL_STRUCTURE_PATH =' + path_ini_struct + '\n'
 
-        if state == 1:
-            list_of_lines[2] = 'INITIAL_STRUCTURE_PATH =' + path_out + '/min_struct.pdb\n'
-
+        # for state 0 the initial structure is chosen. After that the new minimized structures are used.
+        if state > 0:
+            list_of_lines[2] = 'INITIAL_STRUCTURE_PATH =' + path_min_pdb + '\n'
+        else:
+            list_of_lines[2] = 'INITIAL_STRUCTURE_PATH =' + path_ini_struct + '\n'
         with open(path_config, 'w') as config_file:
             config_file.writelines(list_of_lines)
 
-        print(subprocess.check_output(cmd, shell=True))
-        #subprocess.run(cmd, shell=True)
-        print('executed sim')
+        subprocess.run(cmd, shell=True)
 
-        # remove cols of no interest for numpy array creation
-        colspecs = [(0, 6), (6, 11), (12, 16), (16, 17), (17, 20), (21, 22), (22, 26),
-                    (26, 27), (30, 38), (38, 46), (46, 54), (54, 60), (60, 66), (76, 78),
-                    (78, 80)]
-        cols = ['x','y']
-        names = ['ATOM', 'serial', 'name', 'altloc', 'resname', 'chainid', 'resseq',
-                'icode', 'x', 'y', 'z', 'occupancy', 'tempfactor', 'element', 'charge']
-        path_min_pdb = path_out + '/min_struct.pdb'
+        # this adds the initial structure as T=0 to the coordinate array first
+        if state == 0:
+            pdb = pd.read_fwf(path_ini_struct, names=names, colspecs=colspecs, usecols=lambda x: x  in cols).dropna()
+            xy_series[state,:,:] = np.array(pdb, dtype=float)
+
         pdb = pd.read_fwf(path_min_pdb, names=names, skiprows=[0], colspecs=colspecs, usecols=lambda x: x  in cols).dropna()
-        
-        # append to 3d numpy array
-        xy_series[state,:,:] = np.array(pdb, dtype=float)
-
+        xy_series[state+1,:,:] = np.array(pdb, dtype=float)
+        '''
         if state != 0:
             translocate_xy(path_ini_struct, path_min_pdb)
-
+        '''
     return xy_series
 
 
@@ -195,11 +196,10 @@ if __name__ == '__main__':
     #|        ||       ||   ||    |
     # stop when no ops possible
 
-    tad_seeds = np.array([5, 12, 21, 29, 32]) 
+    tad_seeds = np.array([7, 20, 31]) 
     chain_len = 36 # need to change first_initial_structure.pdb first!
     tads_initial = init_tads(tad_seeds)
     series_len = generate_boundary_sequence(tads_initial)
-    series_len = 10
     run_sim(series_len, chain_len)
 
     file = path_out + '/toymodel.npy'
