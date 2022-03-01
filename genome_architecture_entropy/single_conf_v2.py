@@ -7,16 +7,16 @@ from scipy.spatial import distance
 from scipy import stats
 
 import os
-os.chdir('/home/reneschmiedler/Documents/projects/GAM_research-project/GAM_project/genome_architecture_entropy/')
+os.chdir('/Users/pita/Documents/Rene/GAM_project/genome_architecture_entropy/')
 
-#import pyximport; pyximport.install()
-#import cosegregation_internal as ci
+import cosegregation_internal as ci
 import entropy_measures as em
 import toymodel.conf_space as cs
+import toymodel.series
 
-n_slice = 100000
 
-def plot_ensemble(model, mat1, mat2, title, entropy, color_points):
+def plot_ensemble(model, mat1, mat2, cosegregation, title, entropy, color_points):
+    '''2x2 plot fxn'''
     # Generate a mask for the upper triangle from value shape, k=1 to see diagonal line in heatmap
     mask_shape = (mat1.shape[1], mat1.shape[1])
     mask = np.triu(np.ones(mask_shape, dtype=bool), k=0)
@@ -52,7 +52,7 @@ def plot_ensemble(model, mat1, mat2, title, entropy, color_points):
                 square=True,
                 linewidths=0,
                 cbar_kws={"shrink": .82})
-    '''
+    
     ax2[0].set_title('Normalized linkage disequilibirum', loc='left', fontsize=16)
     ax2[0].tick_params(labelleft=False, labelbottom=False)
     sns.heatmap(cosegregation,
@@ -63,7 +63,7 @@ def plot_ensemble(model, mat1, mat2, title, entropy, color_points):
                 square=True, 
                 linewidths=0,
                 cbar_kws={"shrink": .82})
-    '''
+    
     ax2[1].set_title('Joint Entropy', loc='left', fontsize=16)
     ax2[1].tick_params(labelleft=False, labelbottom=False)
     sns.heatmap(mat1,
@@ -77,8 +77,9 @@ def plot_ensemble(model, mat1, mat2, title, entropy, color_points):
 
 
 
-# %% test sampling distribution
-n_slice = 100000
+# %% 
+'''Sampling distribution analysis'''
+n_slice = 5000
 
 xy = np.mgrid[0:10:1, 0:10:1].reshape(2,-1)
 seg_mat = cs.slice(xy, n_slice)
@@ -119,8 +120,8 @@ plt.figtext(0.14, 0, string, fontsize=12, va="top", ha="left")
 
 
 
-
-# %% define model
+# %% 
+'''Model definintion'''
 # model coordinates
 new_model_mixed_xy = np.array([ 1.986,   3.770,
                                     1.651,   2.817,
@@ -163,7 +164,8 @@ new_model = np.array([new_model_mixed_xy[0::2], new_model_mixed_xy[1::2]])
 
 
 
-# %% entropy of chain
+# %% 
+'''Entropy of chain'''
 # calculating all to all euclidean distances
 dist = distance.cdist(np.stack(new_model, axis=1), np.stack(new_model, axis=1))
 
@@ -190,14 +192,15 @@ plot_ensemble(new_model,
 
 
 
-# %% joint entropy and mutual information of segregation
+# %% 
+'''Segregation Analyis'''
 # slicing within x, y boundaries
 n_slice = 10000
 seg_mat = cs.slice(new_model, n_slice)
 
 # calculate normalized linkage disequilibrium
-#cosegregation_raw = ci.dprime_2d(seg_mat.T.astype(int), seg_mat.T.astype(int))
-#cosegregation = cosegregation_raw[cosegregation_raw < 0] = 0
+cosegregation_raw = ci.dprime_2d(seg_mat.T.astype(int), seg_mat.T.astype(int))
+cosegregation = cosegregation_raw[cosegregation_raw < 0] = 0
 
 # calculating shannon-, differential-, joint- entropy and mutual information
 entropy = str(np.around(em.shannon_entropy(seg_mat), 2))
@@ -212,12 +215,15 @@ color_points = [1 - np.abs(item / np.max(mi_sum)) for item in mi_sum]
 plot_ensemble(new_model, 
             je_mat, 
             mi_mat, 
-            #cosegregation,
+            cosegregation,
             'Segregation analysis', 
             entropy, 
             color_points)
 
-# %% cosegregation comparison
+
+
+# %% 
+'''Compare cosegregation to mutual information'''
 # diagonal has to be removed to norm the values of interest
 cosegregation = cosegregation - np.diag(np.diag(cosegregation))
 cosegregation = cosegregation - cosegregation.min()
@@ -243,7 +249,8 @@ plot_ensemble(new_model,
 
 
 
-# %% entropy of lower resolution
+# %% 
+'''Entropy of lower resolution'''
 # lowering resolution by dropping every second loci
 low_res_model = np.array([new_model_mixed_xy[0::4], new_model_mixed_xy[1::4]])
 
@@ -271,7 +278,8 @@ plot_ensemble(low_res_model,
 
 
 
-# %% plotting differential entropy
+# %% 
+'''Plotting differential entropy'''
 # padding and stacking for plotting
 diff_h_low_padded = np.insert(diff_h_low, np.arange(0,18,1), None)
 values = np.abs(np.stack((diff_h, diff_h_chain, diff_h_low_padded)).T)
@@ -286,8 +294,9 @@ plt.title('Differential Entropy between pairs of loci (abs, normalized)', loc='l
 
 
 
-# %% Series
-n_slice = 5000
+# %% 
+'''Original Series'''
+n_slice = 15000
 series = np.load('toymodel/md_soft/out/toymodel.npy')
 
 for state in range(series.shape[0]):
@@ -306,7 +315,45 @@ for state in range(series.shape[0]):
     mi_sum = np.sum(mi_mat, axis=0)
     color_points = [1 - np.abs(item / np.max(mi_sum)) for item in mi_sum]
 
-    title = 'Segregation analysis T=%d' % (state+1)
-    plot_ensemble(model, je_mat, mi_mat, title, entropy, color_points)
+    cosegregation = ci.dprime_2d(seg_mat.T.astype(int), seg_mat.T.astype(int))
+    #cosegregation = cosegregation_raw[cosegregation_raw < 0] = 0
 
-# %%
+    title = 'Segregation analysis T=%d' % (state)
+    plot_ensemble(model, je_mat, mi_mat, cosegregation, title, entropy, color_points)
+
+
+
+# %% 
+'''Quick coordinate viewer'''
+import os
+from matplotlib import pyplot as plt
+os.chdir('/Users/pita/Documents/Rene/GAM_project/genome_architecture_entropy/')
+series = np.load('toymodel/md_soft/out/toymodel.npy')
+series = series_extended
+for state in range(series.shape[0]):
+    model = series[state].T
+    plt.plot(model[0], model[1], '-k') 
+    plt.scatter(model[0], model[1], s=125)
+    plt.tick_params(labelleft=False, labelbottom=False)
+    plt.show()
+
+
+
+# %% 
+'''Interpolated Series'''
+fps = 30 
+series = np.load('toymodel/md_soft/out/toymodel.npy')
+series_extended = np.empty((series.shape[0], fps, series.shape[1], series.shape[2]))
+
+
+for state in range(series.shape[0] - 1):
+    states = np.array([series[state], series[state + 1]])
+    realizations = np.empty((fps, states.shape[1], states.shape[2]))
+
+    for t in range(0, fps):
+        scale = t / (fps - 1)
+        weight = np.full_like(states[0], scale)
+        weights = np.array([1 - weight, weight])
+        realizations[t] = np.average(states, axis=0, weights=weights)
+    
+    series_extended[state,:,:,:] = realizations
