@@ -24,3 +24,6 @@ genome_architecture_entropy/toymodel/__pycache__/conf_space.cpython-38.pyc
 genome_architecture_entropy/toymodel/__pycache__/__init__.cpython-38.pyc
 genome_architecture_entropy/toymodel/config_auto.ini
 genome_architecture_entropy/__pycache__/entropy_measures.cpython-38.pyc
+config_auto.ini
+genome_architecture_entropy/__pycache__/statistical_eval.cpython-38.pyc
+genome_architecture_entropy/__pycache__/entropy_measures.cpython-38.pyc
