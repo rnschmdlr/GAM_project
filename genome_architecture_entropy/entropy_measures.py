@@ -114,9 +114,15 @@ def mutual_information(je_mat):
     return mi_mat
 
 
-def transfer_entropy(prob_xy, prob_yy):
+def transfer_entropy(pXY, pYY):
     """Returns the transfer entropy of two probability distributions"""
-    te = np.sum(prob_xy * np.log2(prob_xy / prob_yy)) # Schreiber et al. 2000
+    #te = np.sum(pXY * np.log2(pXY / pYY)) # Schreiber et al. 2000
+
+    # where p(YY) is 0, p(XY) is implied to be 0 and the contribution of the log term is interpreted as 0 
+    pq_ratio = np.divide(pXY, pYY, out=np.zeros_like(pXY), where=pYY!=0)
+    
+    # result is zero if pXY is 0 because lim_x->0+ xlog(x) = 0
+    te = np.sum(pXY * np.log2(pq_ratio, out=np.zeros_like(pq_ratio), where=pq_ratio!=0))
 
     return te
 
@@ -125,15 +131,20 @@ def all_transfer_entropy(trans_probs):
     """Returns the transfer entropy of all combinations of probability distributions"""
     # rolls the bin*bin nested array to the front 
     probs = np.moveaxis(trans_probs, (2,3), (0,1)) 
+    # remove upper and lower triangular repr. long time intervals with k+1 history length as diagonal cutoff
+    #probs = probs - np.triu(probs, k_history+1) - np.tril(probs, -k_history-1)
     bins = probs.shape[0]
     te_mat = np.zeros((bins, bins))
 
     for bin1 in range(0, bins):
         for bin2 in range(0, bins):
-            prob_yy = probs[bin2, bin2]
-            prob_xy = probs[bin1, bin2]
-            #print('xy', prob_xy, 'yy', prob_yy, sep='\n')
-            te_mat[bin1, bin2] = transfer_entropy(prob_xy, prob_yy)
+            #pYY = probs[bin2, bin2]
+            
+            # use the larger bin to avoid pYY actually being pXX
+            pYY = probs[max(bin1, bin2), max(bin1, bin2)]
+            pXY = probs[bin1, bin2]
+            #print('pXY', pXY, pYY', pYY, sep='\n')
+            te_mat[bin1, bin2] = transfer_entropy(pXY, pYY)
 
     return te_mat
             
@@ -159,3 +170,14 @@ def npmi_2d_fast(region1, region2):
         pmi = np.log2(pXY / pXpY)
         npmi = pmi / -np.log2(pXY)
     return npmi
+
+
+def pmi_2d_fast(region1, region2):
+
+    M = region1.shape[1]
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        pXY = region1.dot(region2.T) / M
+        pXpY = (region1.sum(1).reshape(-1, 1) / M) * (region2.sum(1) / M)
+        pmi = np.log2(pXY / pXpY)
+    return pmi
