@@ -29,10 +29,10 @@ import numpy as np
 
 
 # %% def functions
-def bin_probs(seg_mat, sequence, nbin):
+def bin_probs(seg_mat, sequence, nbin, hist_len=1):
     """
     This function slices entries of a stack of segregation matrices into a number of col bins 
-    that are then given to func alc_probs according to pairwise combinations of sequence 
+    that are then given to func calc_probs according to pairwise combinations of sequence 
     elemements where transition probabilities are calculated and returned.
     
     The number of columns of a segregation matrix (i.e number of data points) must be evenly
@@ -48,6 +48,8 @@ def bin_probs(seg_mat, sequence, nbin):
         the sequence in which the realizations stored in seg_mat are visited
     nbin : int
         user defined number of bins for each realization
+    hist_len : int
+        maximum history length from which entropy is measured to be transferred between time series
 
     Return
     ------
@@ -62,26 +64,45 @@ def bin_probs(seg_mat, sequence, nbin):
         sys.exit()
     else: bin_len = int(seq_len / nbin)
 
+    bins1 = np.zeros((nbin, seg_mat.shape[1], bin_len))
+    bins2 = np.zeros((nbin, seg_mat.shape[1], bin_len))
     tprob_all = np.empty(shape=(0, nbin))
 
+    # compute all possible state combinations
     comb_vect = np.array(np.meshgrid(sequence, sequence)).T.reshape(-1,2)
     comb_vect = np.unique(comb_vect, axis=0)
     n = int(math.sqrt(comb_vect.shape[0]))
 
-    bins1 = np.zeros((nbin, seg_mat.shape[1], bin_len))
-    bins2 = np.zeros((nbin, seg_mat.shape[1], bin_len))
+    # only compute state combinations of k off the diagonal
+    l = len(sequence)
+    mat = np.ones((l, l))
+    # remove upper and lower triangular repr. long time intervals with k+1 history length as diagonal cutoff
+    mat_sparse = mat - np.triu(mat, hist_len +1) - np.tril(mat, -hist_len -1)
+    comb_vect_sparse = np.transpose(np.nonzero(mat_sparse)) 
+
+    # checks which elements from comb_vect_sparse are in comb_vect and returns bool vector
+    check = (comb_vect[:, None] == comb_vect_sparse).all(-1).any(-1)
 
     for zx in range(comb_vect.shape[0]):
-        state1 = int(comb_vect[zx, 0])
-        state2 = int(comb_vect[zx, 1])
-        
-        for idx in range(0, seq_len-bin_len+1, bin_len):
-            i = int(idx / bin_len)
-            bins1[i] = seg_mat[state1, :, idx:idx+bin_len]
-            bins2[i] = seg_mat[state2, :, idx:idx+bin_len]
+        # only compute transition probability for non zero combinations -> eval true in check
+        if check[zx]:
+            state1 = int(comb_vect[zx, 0])
+            state2 = int(comb_vect[zx, 1])
 
-        tprob_all = np.append(tprob_all, calc_probs(bins1, bins2, prnt=False), axis=0)
-    tprob_all = np.reshape(tprob_all, (n,n,nbin,nbin))
+            for idx in range(0, seq_len-bin_len+1, bin_len):
+                i = int(idx / bin_len)
+                bins1[i] = seg_mat[state1, :, idx:idx+bin_len]
+                bins2[i] = seg_mat[state2, :, idx:idx+bin_len]
+
+            #print('\n__________________________\n', state1, state2)
+            tprob_bin = calc_probs(bins1, bins2)
+            
+        else:
+            tprob_bin = np.zeros(shape=(nbin, nbin))
+        
+        tprob_all = np.append(tprob_all, tprob_bin, axis=0)
+
+    tprob_all = np.reshape(tprob_all, (n, n, nbin, nbin))
 
     return tprob_all
 
@@ -92,19 +113,26 @@ def calc_probs(bins1, bins2, prnt=False):
     # element-wise differences of all pairs
     dist = bins1[:, None] - bins2[None, :] 
     dist_mat = np.sum(np.sum(np.abs(dist), axis=-1), axis=-1) 
-    dist_mat[dist_mat == 0] = 1
 
-    outdeg = np.sum(dist_mat, axis=1)[:, None] # weighted degree
-    deg_mat = np.zeros_like(dist_mat) # degree matrix
-    np.fill_diagonal(deg_mat, outdeg)
-    deg_mat = np.linalg.inv(deg_mat)
+    # when there is no difference between two states, the distances must still sum > 0 so that
+    # all degrees are > 0 and the degree matrix can be inverted. The transition probability will
+    # become distributed equally
+    zero_rows = np.where(np.all(np.isclose(dist_mat, 0), axis=1))
+    dist_mat[zero_rows] = 1
 
-    tprob_bins = np.matmul(deg_mat, dist_mat)
+    outdeg = np.sum(dist_mat, axis=1)[:, None] # weighted degrees as col vector
+    deg_mat = np.zeros_like(dist_mat) 
+    np.fill_diagonal(deg_mat, outdeg) # degree matrix D
+
+    # M = D^-1 * A
+    tprob_bins = 1- np.matmul(np.linalg.inv(deg_mat), dist_mat)
 
     if prnt:
-        #print('\n bins1: \n', bins1, '\n bins2: \n', bins2)
-        #print('\n distances: \n', dist, '\n')
-        #print('\n degrees: \n', outdeg, '\n')
-        print('\n raw dist mat: \n', dist_mat, '\n')
+        print('\n bins1: \n', bins1, '\n bins2: \n', bins2)
+        print('\n distances: \n', dist)
+        print('\n dist mat: \n', dist_mat)
+        print('\n degrees: \n', outdeg)
+        print('\n degree matrix: \n', deg_mat)
+        print('\n tprob_bins: \n', tprob_bins)
 
     return tprob_bins
