@@ -113,6 +113,12 @@ def calc_probs(bins1, bins2, prnt=False):
     # element-wise differences of all pairs
     dist = bins1[:, None] - bins2[None, :] 
     dist_mat = np.sum(np.sum(np.abs(dist), axis=-1), axis=-1) 
+    
+    # scale matrix unless it is all 0. In that case it becomes all ones.
+    if dist_mat.max() != 0:
+        dist_mat = dist_mat - dist_mat.min()
+        dist_mat = 1 - dist_mat/dist_mat.max()
+    else: dist_mat = np.ones_like(dist_mat)
 
     # when there is no difference between two states, the distances must still sum > 0 so that
     # all degrees are > 0 and the degree matrix can be inverted. The transition probability will
@@ -125,7 +131,7 @@ def calc_probs(bins1, bins2, prnt=False):
     np.fill_diagonal(deg_mat, outdeg) # degree matrix D
 
     # M = D^-1 * A
-    tprob_bins = 1- np.matmul(np.linalg.inv(deg_mat), dist_mat)
+    tprob_bins = np.matmul(np.linalg.inv(deg_mat), dist_mat)
 
     if prnt:
         print('\n bins1: \n', bins1, '\n bins2: \n', bins2)
