@@ -23,3 +23,4 @@ genome_architecture_entropy/toymodel/md_soft/initial_structure copy.pdb
 genome_architecture_entropy/toymodel/config_auto.ini
 config_auto.ini
 .vscode/settings.json
+genome_architecture_entropy/grid_search.npy
