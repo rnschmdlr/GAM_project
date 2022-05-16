@@ -25,7 +25,7 @@ def create_cont_series(length, param, xself_dep, yran):
     for i in range(1, length+1):
         k_base = np.random.normal(loc=0, scale=2)
         for k in range(0, param):
-            X[i, k] = np.around(xself_dep * (X[i-1, k] + k_base) + (1 - xself_dep) * np.random.normal(loc=0, scale=2), 5)
+            X[i, k] = np.around(k_base + xself_dep * X[i-1, k] + (1 - xself_dep) * np.random.normal(loc=0, scale=2), 5)
             Y[i, k] = np.around((1-yran) * X[i-1, k] + yran * np.random.normal(loc=0, scale=2), 5)
 
     return X,Y
@@ -66,29 +66,30 @@ def test(X, Y, hist_len):
 
 def permutation_test(length, param, xself_dep, rep, hist_len, nperm=100):
     alpha = 0.05 # significance treshold
+    global perm_res
     perm_res = np.zeros(shape=(nperm , 1))
     res = np.zeros(shape=(rep, 2))
 
-    #for j in atpbar(range(rep), name = multiprocessing.current_process().name):
-    for j in range(rep):
+    for j in atpbar(range(rep), name = multiprocessing.current_process().name):
+    #for j in range(rep):
         X, Y = create_cont_series(length, param, xself_dep, yran)
-
-        '''
-        if (j == 0) and param < 4:
+        
+        if False: #(j == 0) and param < 11:
             plt.plot(np.linspace(0, length, length+1), X, label = "X")
             plt.plot(np.linspace(0, length, length+1), Y, label = "Y", linestyle='dotted')
             plt.legend()
             plt.show()
-        '''
+        
         res[j, 0] = test(X, Y, hist_len)
+        
         # X is permuted nperm times and the significance result saved to each series realization te entry
         for perm in range(nperm):
             X_perm = np.random.permutation(X)
             perm_res[perm] = test(X_perm, Y, hist_len)
-
+        
         # two sided p-test: surrogate TE larger/smaller than original in percent
-        proportion_myte_left = (perm_res >= res[j,1]).sum() / rep
-        proportion_myte_right = (perm_res <= res[j,1]).sum() / rep
+        proportion_myte_left = (perm_res >= res[j, 0]).sum() / rep
+        proportion_myte_right = (perm_res <= res[j, 0]).sum() / rep
         res[j, 1] = int(proportion_myte_left < alpha or proportion_myte_right < alpha)
 
     return res
@@ -96,35 +97,37 @@ def permutation_test(length, param, xself_dep, rep, hist_len, nperm=100):
 
 def grid_search(rep, nperm):
     reporter = find_reporter()
-    grid = np.zeros(shape=(4,4,4,4))
+    grid_prop = np.zeros(shape=(4,4,4,4))
+    grid_std = np.zeros(shape=(4,4,4,4))
 
-    for l, length in enumerate([5, 10, 25, 50]):
-        for p, param in enumerate([1, 2, 5, 10]):
+    for l, length in enumerate([5, 10, 20, 40]):
+        for p, param in enumerate([1, 5, 25, 125]):
             print('\nlength =', length, ' ', l+1, '/4')
             print('param  =', param, ' ', p+1, '/4')
-            for k, hist_len in enumerate([1, 2, 5, length]):
+            for k, hist_len in enumerate([1, 2, 4, length]):
 
                 with multiprocessing.Pool(4, register_reporter, [reporter]) as pool:
                     workloads = [(length, param, 0, rep, hist_len, nperm),
                                 (length, param, 0.2, rep, hist_len, nperm),
-                                (length, param, 0.5, rep, hist_len, nperm),
-                                (length, param, 0.9, rep, hist_len, nperm)]
+                                (length, param, 0.4, rep, hist_len, nperm),
+                                (length, param, 0.8, rep, hist_len, nperm)]
                     res = pool.starmap(permutation_test, workloads)
                     flush()
                 for item, array in enumerate(res):
-                    grid[l, p, k, item] = np.sum(array, axis=0)[1] / rep
+                    grid_prop[l, p, k, item] = np.sum(array, axis=0)[1] / rep
+                    grid_std[l, p, k, item] = np.std(array, axis=0)[0]
                 #for s, xself_dep in enumerate([0, 0.2, 0.5, 0.8]):
                     #res = permutation_test(length, param, xself_dep, rep, hist_len, nperm)
                     #grid[l, p, k, s] = np.sum(res, axis=0)[1] / rep
 
-    return grid
+    return grid_prop, grid_std
 
 
 # %% 
 'Compute TE of lin. dependent process X -> Y'
 
-length = 50
-param = 4
+length = 20
+param = 3
 xself_dep = 0.3
 global yran; yran = 0
 #global hist_len; hist_len = 1
@@ -132,10 +135,16 @@ global yran; yran = 0
 rep = 10 # number of iterations
 nperm = 100 # number of permutations for signficance testing
 
-#res = permutation_test(length, param, xself_dep, rep, hist_len, nperm)
-#print('mean TE =', np.around(np.mean(res, axis=0)[0], 4))
-#print('std =', np.around(np.std(res, axis=0)[0], 4))
-#print('signif. ratio =', np.sum(res, axis=0)[1] / rep)
-#print('\nlength =', length, '; n parameter =', param, '; history length = ', hist_len, ';\nX self-depency =', xself_dep, '; Y randomness =', yran)
+'''
+res = permutation_test(length, param, xself_dep, rep, hist_len, nperm)
 
-grid = grid_search(rep, nperm)
+if rep > 1:
+    print('mean TE =', np.around(np.mean(res, axis=0)[0], 4))
+    print('std =', np.around(np.std(res, axis=0)[0], 4))
+    print('signif. ratio =', np.sum(res, axis=0)[1] / rep)
+print('\nlength =', length, '; n parameter =', param, '; history length = ', hist_len, ';\nX self-dependency =', xself_dep, '; Y randomness =', yran)
+'''
+
+grid, std = grid_search(rep, nperm)
+np.save('~/grid.py', grid)
+np.save('~/std.py', std)
