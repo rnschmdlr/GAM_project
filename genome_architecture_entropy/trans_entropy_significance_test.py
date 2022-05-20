@@ -105,7 +105,7 @@ def grid_search(rep, nperm):
     meffTE = np.zeros(shape=(4,4,4,4))
 
     for l, length in enumerate([5, 10, 20, 40]):
-        for p, param in enumerate([1, 5, 10, 15]):
+        for p, param in enumerate([1, 5, 25, 125]):
             print('\nlength =', length, ' ', l+1, '/4')
             print('param  =', param, ' ', p+1, '/4')
             for k, hist_len in enumerate([1, 2, 4, length]):
@@ -150,5 +150,8 @@ print('\nlength =', length, '; n parameter =', param, '; history length = ', his
 '''
 
 grid, meffTE = grid_search(rep, nperm)
-np.save('~/grid.npy', grid)
-np.save('~/mean_eff_TE.npy', meffTE)
+np.save('/Users/pita/Documents/Rene/GAM_project/genome_architecture_entropy/grid.npy', grid)
+np.save('/Users/pita/Documents/Rene/GAM_project/genome_architecture_entropy/mean_eff_TE.npy', meffTE)
+
+#np.save('~/grid.npy', grid)
+#np.save('~/mean_eff_TE.npy', meffTE)
