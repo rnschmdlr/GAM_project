@@ -105,7 +105,9 @@ def slice(xy_coord_mat, sample_n=100000):
     points  = MultiPoint(np.stack(xy_coord_mat, axis=1))
     seg_mat = np.zeros((sample_n, len(points.geoms)))
 
-    for iter in range(sample_n):
+    #for iter in range(sample_n):
+    iter = 0
+    while iter < sample_n:
         rand_y     = np.random.uniform(low=ymin_sample, high=ymax_sample)
         slice_ymin = rand_y - 0.5 * sample_height
         slice_ymax = rand_y + 0.5 * sample_height
@@ -116,15 +118,19 @@ def slice(xy_coord_mat, sample_n=100000):
         slice      = sa.rotate(slice, rand_angle, origin=(rand_x, rand_y))
         x,y        = slice.exterior.xy
 
-        if plot:
-            plt.plot(x,y, linewidth = 0.1, color='k', fillstyle='full', alpha=0.01)
-            ax = plt.gca()
-            ax.set_xlim([xmin_sample - width_sample, xmax_sample + width_sample])
-            ax.set_ylim([ymin_sample - height_sample, ymax_sample + height_sample])
-            ax.set_aspect('equal', 'box')
-
         for p in range(len(points.geoms)):
             seg_mat[iter, p] = slice.contains(points[p])
+
+        # next iteration only if slice is non-empty (any True)
+        if seg_mat[iter, :].any():
+            iter = iter + 1
+
+            if plot:
+                plt.plot(x,y, linewidth = 0.1, color='k', fillstyle='full', alpha=0.01)
+                ax = plt.gca()
+                ax.set_xlim([xmin_sample - width_sample, xmax_sample + width_sample])
+                ax.set_ylim([ymin_sample - height_sample, ymax_sample + height_sample])
+                ax.set_aspect('equal', 'box')
 
     if plot:
         sample_area = patches.Rectangle((xmin_sample, ymin_sample), 
