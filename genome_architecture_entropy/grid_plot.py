@@ -5,10 +5,10 @@ import matplotlib.lines as lines
 import seaborn as sns
 import itertools
 
-grid = np.load('/Users/pita/Documents/Rene/GAM_project/genome_architecture_entropy/grid_search.npy')
-series_lengths = [5, 10, 25, 50]
-num_params = [1, 2, 5, 10]
-self_dep = [0.0, 0.2, 0.5, 0.9]
+grid = np.load('/Users/pita/Documents/Rene/GAM_project/genome_architecture_entropy/grid.npy')
+series_lengths = [5, 10, 20, 40]
+num_params = [1, 5, 10, 20]
+self_dep = [0.0, 0.2, 0.4, 0.8]
 
 sns.set_theme(style="white")
 
@@ -25,7 +25,7 @@ for ax, (x, y) in zip(axes.flat, list(itertools.product(reversed(range(4)), rang
 
     series_len = series_lengths[x]
     num_param = num_params[y]
-    history_length = [1, 2, 5, series_len]
+    history_length = [1, 2, 4, series_len]
 
     cmap = sns.color_palette('flare', as_cmap=True)
     sns.heatmap(
