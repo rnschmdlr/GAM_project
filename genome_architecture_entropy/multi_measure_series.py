@@ -327,7 +327,21 @@ sns.heatmap(pmi_mat,
             vmin=0)
 
 # %%
-'''Transfer entropy network '''
+'''Transfer entropy'''
+n_slice = 20000
+series = np.load('toymodel/md_soft/out/toymodel.npy')
+length = series.shape[0]
+seg_mats = np.empty((length, n_slice, series.shape[1]))
+
+for state in tqdm(range(length)):
+    coords_model = series[state].T
+    seg_mat = cs.slice(coords_model, n_slice)
+    seg_mats[state] = seg_mat
+
+sequence = np.linspace(0, length-1, length) # order of realizations is ordered
+probs = tb.bin_probs(seg_mats, sequence, nbin=36, hist_len = length -1)
+te_mat = em.all_transfer_entropy(probs)
+
 te_mat_asym = te_mat - te_mat.T
 
 sns.heatmap(te_mat_asym,
@@ -338,7 +352,10 @@ sns.heatmap(te_mat_asym,
             cbar_kws={"shrink": .82})
 plt.show()
 
-te_mat_asym[te_mat_asym < 0.06] = 0
+# %% 
+'''Transfer entropy network'''
+
+te_mat_asym[te_mat_asym < 0] = 0
 
 def nmax_cube(array, n):
     row_idx = np.argpartition(array, range(n))[:, :-n-1: -1]
