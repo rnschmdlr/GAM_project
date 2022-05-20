@@ -64,6 +64,10 @@ def bin_probs(seg_mat, sequence, nbin, hist_len=1):
         sys.exit()
     else: bin_len = int(seq_len / nbin)
 
+    # max disrance of any two bins can not be larger than the largest number of occurences of a loci in all slices * number of bins
+    global max_dist; max_dist = np.max(np.sum(seg_mat, axis=1)) * bin_len * 2
+    max_dist = max(np.abs(np.min(seg_mat)), np.max(seg_mat)) * 2
+
     bins1 = np.zeros((nbin, seg_mat.shape[1], bin_len))
     bins2 = np.zeros((nbin, seg_mat.shape[1], bin_len))
     tprob_all = np.empty(shape=(0, nbin))
@@ -113,12 +117,13 @@ def calc_probs(bins1, bins2, prnt=False):
     # element-wise differences of all pairs
     dist = bins1[:, None] - bins2[None, :] 
     dist_mat = np.sum(np.sum(np.abs(dist), axis=-1), axis=-1) 
-    
-    # scale matrix unless it is all 0. In that case it becomes all ones.
-    if dist_mat.max() != 0:
-        dist_mat = dist_mat - dist_mat.min()
-        dist_mat = 1 - dist_mat/dist_mat.max()
-    else: dist_mat = np.ones_like(dist_mat)
+
+    # define max possible distance as all mismatches between all columns of bins, or the highest distance
+    #max_dist = max(bins1.shape[1], dist_mat.max())
+    # scale matrix from distance 0 to inf -> similarity 1 to 0 so that an all zero distance matrix becomes all ones
+    dist_mat = dist_mat - dist_mat.min()
+    #dist_mat = 1 - np.divide(dist_mat, dist_mat.max(), out=np.zeros_like(dist_mat), where=dist_mat.max()!=0, casting='unsafe')
+    dist_mat = 1 - dist_mat / max_dist
 
     # when there is no difference between two states, the distances must still sum > 0 so that
     # all degrees are > 0 and the degree matrix can be inverted. The transition probability will
@@ -134,11 +139,12 @@ def calc_probs(bins1, bins2, prnt=False):
     tprob_bins = np.matmul(np.linalg.inv(deg_mat), dist_mat)
 
     if prnt:
-        print('\n bins1: \n', bins1, '\n bins2: \n', bins2)
-        print('\n distances: \n', dist)
+        print(max_dist)
+        #print('\n bins1: \n', bins1, '\n bins2: \n', bins2)
+        #print('\n distances: \n', dist)
         print('\n dist mat: \n', dist_mat)
-        print('\n degrees: \n', outdeg)
-        print('\n degree matrix: \n', deg_mat)
+        #print('\n degrees: \n', outdeg)
+        #print('\n degree matrix: \n', deg_mat)
         print('\n tprob_bins: \n', tprob_bins)
 
     return tprob_bins
