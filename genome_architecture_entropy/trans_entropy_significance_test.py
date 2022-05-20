@@ -25,8 +25,8 @@ def create_cont_series(length, param, xself_dep, yran):
     for i in range(1, length+1):
         k_base = np.random.normal(loc=0, scale=2)
         for k in range(0, param):
-            X[i, k] = np.around(k_base + xself_dep * X[i-1, k] + (1 - xself_dep) * np.random.normal(loc=0, scale=2), 5)
-            Y[i, k] = np.around((1-yran) * X[i-1, k] + yran * np.random.normal(loc=0, scale=2), 5)
+            X[i, k] = np.around(k_base + xself_dep * X[i-1, k] + (1 - xself_dep) * np.random.normal(loc=0, scale=10), 5)
+            Y[i, k] = np.around((1-yran) * X[i-1, k] + yran * np.random.normal(loc=0, scale=10), 5)
 
     return X,Y
 
@@ -49,16 +49,17 @@ def create_binary_series(length, param, xself_dep, yran):
 def test(X, Y, hist_len):
     global probs
     global te_mat
+    global process
     length = X.shape[0]
     param = X.shape[1]
-    nbin = nbin = 2*param
+    nbin = 2*param
 
     process = np.dstack((X,Y)).reshape(length, 1, 2*param, order='F')
     sequence = np.linspace(0, length-1, length)
     probs = tb.bin_probs(process, sequence, nbin, hist_len)
     te_mat = em.all_transfer_entropy(probs)
-    te_yx = np.sum(np.triu(te_mat))
-    te_xy = np.sum(np.tril(te_mat))
+    te_yx = np.sum(te_mat[:param, param:]) #np.sum(np.triu(te_mat))
+    te_xy = np.sum(te_mat[param:, :param]) #np.sum(np.tril(te_mat))
     te_net_xy = te_xy - te_yx
 
     return te_net_xy
@@ -74,10 +75,10 @@ def permutation_test(length, param, xself_dep, rep, hist_len, nperm=100):
     #for j in range(rep):
         X, Y = create_cont_series(length, param, xself_dep, yran)
         
-        if False: #(j == 0) and param < 11:
+        if True: #(j == 0) and param < 11:
             plt.plot(np.linspace(0, length, length+1), X, label = "X")
             plt.plot(np.linspace(0, length, length+1), Y, label = "Y", linestyle='dotted')
-            plt.legend()
+            #plt.legend()
             plt.show()
         
         res[j, 0] = test(X, Y, hist_len)
@@ -86,11 +87,14 @@ def permutation_test(length, param, xself_dep, rep, hist_len, nperm=100):
         for perm in range(nperm):
             X_perm = np.random.permutation(X)
             perm_res[perm] = test(X_perm, Y, hist_len)
-        
+
+        perm_mean = np.mean(perm_res)
+
         # two sided p-test: surrogate TE larger/smaller than original in percent
         proportion_myte_left = (perm_res >= res[j, 0]).sum() / rep
-        proportion_myte_right = (perm_res <= res[j, 0]).sum() / rep
-        res[j, 1] = int(proportion_myte_left < alpha or proportion_myte_right < alpha)
+        #proportion_myte_right = (perm_res <= res[j, 0]).sum() / rep
+        res[j, 1] = int(proportion_myte_left < alpha )
+        res[j, 0] = res[j, 0] - perm_mean
 
     return res
 
@@ -98,10 +102,10 @@ def permutation_test(length, param, xself_dep, rep, hist_len, nperm=100):
 def grid_search(rep, nperm):
     reporter = find_reporter()
     grid_prop = np.zeros(shape=(4,4,4,4))
-    grid_std = np.zeros(shape=(4,4,4,4))
+    meffTE = np.zeros(shape=(4,4,4,4))
 
     for l, length in enumerate([5, 10, 20, 40]):
-        for p, param in enumerate([1, 5, 25, 125]):
+        for p, param in enumerate([1, 5, 10, 15]):
             print('\nlength =', length, ' ', l+1, '/4')
             print('param  =', param, ' ', p+1, '/4')
             for k, hist_len in enumerate([1, 2, 4, length]):
@@ -115,28 +119,28 @@ def grid_search(rep, nperm):
                     flush()
                 for item, array in enumerate(res):
                     grid_prop[l, p, k, item] = np.sum(array, axis=0)[1] / rep
-                    grid_std[l, p, k, item] = np.std(array, axis=0)[0]
+                    meffTE[l, p, k, item] = np.std(array, axis=0)[0]
                 #for s, xself_dep in enumerate([0, 0.2, 0.5, 0.8]):
                     #res = permutation_test(length, param, xself_dep, rep, hist_len, nperm)
                     #grid[l, p, k, s] = np.sum(res, axis=0)[1] / rep
 
-    return grid_prop, grid_std
+    return grid_prop, meffTE
 
 
 # %% 
 'Compute TE of lin. dependent process X -> Y'
 
-length = 20
-param = 3
-xself_dep = 0.3
+length = 10
+param = 4
+xself_dep = 0.95
 global yran; yran = 0
-#global hist_len; hist_len = 1
+global hist_len; hist_len = 1
 
-rep = 10 # number of iterations
-nperm = 100 # number of permutations for signficance testing
-
+rep = 5 # number of iterations
+nperm = 10 # number of permutations for signficance testing
 '''
 res = permutation_test(length, param, xself_dep, rep, hist_len, nperm)
+print(res)
 
 if rep > 1:
     print('mean TE =', np.around(np.mean(res, axis=0)[0], 4))
@@ -145,6 +149,6 @@ if rep > 1:
 print('\nlength =', length, '; n parameter =', param, '; history length = ', hist_len, ';\nX self-dependency =', xself_dep, '; Y randomness =', yran)
 '''
 
-grid, std = grid_search(rep, nperm)
-np.save('~/grid.py', grid)
-np.save('~/std.py', std)
+grid, meffTE = grid_search(rep, nperm)
+np.save('~/grid.npy', grid)
+np.save('~/mean_eff_TE.npy', meffTE)
