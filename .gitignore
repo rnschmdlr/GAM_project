@@ -24,3 +24,5 @@ genome_architecture_entropy/toymodel/config_auto.ini
 config_auto.ini
 .vscode/settings.json
 genome_architecture_entropy/grid_search.npy
+genome_architecture_entropy/mean_eff_TE.npy
+genome_architecture_entropy/grid.npy
