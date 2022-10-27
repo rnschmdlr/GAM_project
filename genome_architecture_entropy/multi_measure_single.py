@@ -1,4 +1,5 @@
 # %% import
+os.chdir('/Users/pita/Documents/Rene/GAM_project/genome_architecture_entropy/')
 import os
 import numpy as np
 import pandas as pd
@@ -12,7 +13,6 @@ import cosegregation_internal as ci
 import entropy_measures as em
 import toymodel.conf_space as cs
 
-os.chdir('/Users/pita/Documents/Rene/GAM_project/genome_architecture_entropy/')
 path_series_out = str(pathlib.Path.cwd() / 'toymodel/out/')
 
 
@@ -116,14 +116,14 @@ def plot_ensemble(coords_model, je_mat, mi_mat, coseg_mat, title, entropy, color
 
 # %% 
 '''Sampling distribution analysis'''
-n_slice = 5000
+n_slice = 20000
 
 xy = np.mgrid[0:10:1, 0:10:1].reshape(2,-1)
 seg_mat = cs.slice(xy, n_slice)
 freq = np.sum(seg_mat, axis=0)
 rel_freq = freq / n_slice
-mean = np.round(np.mean(rel_freq), 4)
-std = np.round(np.std(rel_freq), 4)
+mean = np.mean(rel_freq)
+std = np.std(rel_freq)
 max_freq = np.max(freq)
 
 color = [1 - item/max_freq for item in freq]
@@ -133,7 +133,7 @@ norm = colors.Normalize(vmin=0.0, vmax=1.0)
 fig, (ax1, ax2) = plt.subplots(1, 2)
 fig.set_size_inches(13, 5)
 fig.tight_layout(pad=4, w_pad=0.3)
-fig.suptitle('Probability of loci in slices', size='x-large', weight='bold')
+fig.suptitle('Probability of loci in {} slices'.format(n_slice), size='x-large', weight='bold')
 sns.set_theme(style="white")
 
 ax1.scatter(xy[0], xy[1], s=100, c=cmap(norm(color)))
@@ -152,7 +152,7 @@ ax2.set_title('Relative frequency', loc='left', size='large')
 ax2.set(xlabel = 'loci', ylabel = 'frequency')
 
 plt.axhline(mean, color='r')
-string = 'mean = ' + str(mean*100) + '%; SD = ' + str(std*100) + '%; ' + str(np.around(std/mean*100, 2)) + ' % mean'
+string = 'mean = ' + str(np.around(mean*100, 2)) + '%; SD = ' + str(np.around(std*100, 2)) + '%; ' # + str(np.around(std/mean*100, 2)) + ' % mean'
 plt.figtext(0.14, 0, string, fontsize=12, va="top", ha="left")
 
 
