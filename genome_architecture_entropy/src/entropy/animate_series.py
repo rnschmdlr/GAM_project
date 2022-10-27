@@ -2,7 +2,6 @@
 '''Segregation Analysis'''
 import os
 import numpy as np
-import pathlib
 import seaborn as sns
 import matplotlib
 from matplotlib import pyplot as plt
@@ -11,14 +10,17 @@ import matplotlib
 from tqdm.auto import tqdm
 import cmcrameri.cm as cmc
 
-os.chdir('/Users/pita/Documents/Rene/GAM_project/genome_architecture_entropy/')
+#os.chdir('/Users/pita/Documents/Rene/GAM_project/genome_architecture_entropy/')
 
-import cosegregation_internal as ci
-import entropy_measures as em
-import toymodel.conf_space as cs
-import toymodel.trans_probs as tb
+import shannon_entropies.compute_2d_entropies as em
+import transfer_entropy.compute_transfer_entropy as te
+import transfer_entropy.transition as tb
+import toymodel.sampling
 
-path_series_out = str(pathlib.Path.cwd() / 'toymodel/out/')
+path_model = '/data/toymodels/model2/'
+model = 'toymodel2'
+series = np.load(path_model + model + '.npy')
+path_series_out = path_model + '/series'
 
 def plot_large_ensemble(coords_model, matrices_vmax_dict, mi_sums_vmax, state_H, *args):
     '''4x2 plot fxn'''
@@ -122,9 +124,7 @@ def scale(a):
 # %% 
 '''Interpolate Series'''
 fps = 30 
-series = np.load('toymodel/md_soft/out/toymodel.npy')
 series_extended = np.empty((series.shape[0], fps, series.shape[1], series.shape[2]))
-
 
 for state in range(series.shape[0] - 1):
     states = np.array([series[state], series[state + 1]])
@@ -139,22 +139,21 @@ for state in range(series.shape[0] - 1):
     series_extended[state,:,:,:] = realizations
 
 series_extended = series_extended.reshape(-1, series.shape[1], 2)
-np.save('toymodel/md_soft/out/toymodel_interpolated.npy', series_extended)
+np.save(path_model + 'toymodel_interpolated.npy', series_extended)
 
 
 
 # %%
 '''Series 2D Calculations'''
 n_slice = 2000
-series = np.load('toymodel/md_soft/out/toymodel2.npy')
-#series_extended = np.load('toymodel/md_soft/out/toymodel_interpolated.npy')
+#series_extended = np.load(path_model + 'toymodel_interpolated.npy')
 seg_mats = np.empty((series.shape[0], n_slice, series.shape[1]))
 mi_vmax = 0
 
 # precompute max values over series
 for state in tqdm(range(series.shape[0])):
     coords_model = series[state].T
-    seg_mat = cs.slice(coords_model, n_slice)
+    seg_mat = toymodel.sampling.slice(coords_model, n_slice)
 
     mi_mat = em.normalized_mutual_information(seg_mat.T, c=False)
     mi_mat = scale(mi_mat)
@@ -172,7 +171,7 @@ for state in tqdm(range(series.shape[0])):
 # compute all information measures:
 for state in tqdm(range(series.shape[0])):
     coords_model = series[state].T
-    seg_mat = cs.slice(coords_model, n_slice)
+    seg_mat = toymodel.sampling.slice(coords_model, n_slice)
 
     mi_mat = em.normalized_mutual_information(seg_mat.T, c=False)
     mi_mat = scale(mi_mat)
@@ -186,7 +185,9 @@ for state in tqdm(range(series.shape[0])):
     #mask = ncmi_mat < np.mean(ncmi_mat_d)
     #mi_sums = np.sum(ncmi_mat, axis=0, where=np.invert(mask))
 
-    coseg_mat = ci.dprime_2d(seg_mat.T.astype(int), seg_mat.T.astype(int))
+    coseg_mat = np.ones_like(ncmi_mat) 
+    # depreciated
+    # ci.dprime_2d(seg_mat.T.astype(int), seg_mat.T.astype(int))
 
     npmi_mat = em.npmi_2d_fast(seg_mat.T.astype(int), seg_mat.T.astype(int))
     npmi_mat = np.nan_to_num(npmi_mat, copy=False, nan=0)
@@ -271,8 +272,9 @@ def plot_large_ensemble(coords_model, matrices_vmax_dict, drivers, norm, state_H
 
 
 '''Transfer Entropy Calculations'''
-series = np.load('toymodel/md_soft/out/toymodel.npy')
-seg_mats = np.load('/Users/pita/Documents/Rene/GAM_project/genome_architecture_entropy/seg_mats_20k.npy')
+seg_file = '_seg_mats_2000_t7.npy'
+seg_mats = np.load(path_model + model + seg_file)
+
 te_vmax = 0
 te_loci_vmax = 0
 te_loci_vmin = 0
