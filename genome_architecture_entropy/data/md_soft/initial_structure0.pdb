@@ -1,0 +1,63 @@
+ATOM      1  B   BEA A   1       0.010   0.010   0.000  1.00  0.00           B  
+ATOM      2  B   BEA A   2       1.009   0.064   0.000  1.00  0.00           B  
+ATOM      3  B   BEA A   3       2.008   0.039   0.000  1.00  0.00           B  
+ATOM      4  B   BEA A   4       3.008   0.063   0.000  1.00  0.00           B  
+ATOM      5  B   BEA A   5       4.005  -0.019   0.000  1.00  0.00           B  
+ATOM      6  B   BEA A   6       5.004  -0.057   0.000  1.00  0.00           B  
+ATOM      7  B   BEA A   7       6.003  -0.092   0.000  1.00  0.00           B  
+ATOM      8  B   BEA A   8       6.999  -0.005   0.000  1.00  0.00           B  
+ATOM      9  B   BEA A   9       7.997  -0.069   0.000  1.00  0.00           B  
+ATOM     10  B   BEA A  10       8.996  -0.009   0.000  1.00  0.00           B  
+ATOM     11  B   BEA A  11       9.991  -0.102   0.000  1.00  0.00           B  
+ATOM     12  B   BEA A  12      10.988  -0.021   0.000  1.00  0.00           B  
+ATOM     13  B   BEA A  13      11.987  -0.064   0.000  1.00  0.00           B  
+ATOM     14  B   BEA A  14      12.986  -0.097   0.000  1.00  0.00           B  
+ATOM     15  B   BEA A  15      13.984  -0.031   0.000  1.00  0.00           B  
+ATOM     16  B   BEA A  16      14.984  -0.002   0.000  1.00  0.00           B  
+ATOM     17  B   BEA A  17      15.981   0.075   0.000  1.00  0.00           B  
+ATOM     18  B   BEA A  18      16.977   0.167   0.000  1.00  0.00           B  
+ATOM     19  B   BEA A  19      17.976   0.142   0.000  1.00  0.00           B  
+ATOM     20  B   BEA A  20      18.976   0.130   0.000  1.00  0.00           B  
+ATOM     21  B   BEA A  21      19.972   0.042   0.000  1.00  0.00           B  
+ATOM     22  B   BEA A  22      20.969  -0.040   0.000  1.00  0.00           B  
+ATOM     23  B   BEA A  23      21.969  -0.007   0.000  1.00  0.00           B  
+ATOM     24  B   BEA A  24      22.968   0.022   0.000  1.00  0.00           B  
+ATOM     25  B   BEA A  25      23.966   0.093   0.000  1.00  0.00           B  
+ATOM     26  B   BEA A  26      24.965   0.136   0.000  1.00  0.00           B  
+ATOM     27  B   BEA A  27      25.964   0.176   0.000  1.00  0.00           B  
+ATOM     28  B   BEA A  28      26.963   0.127   0.000  1.00  0.00           B  
+ATOM     29  B   BEA A  29      27.962   0.170   0.000  1.00  0.00           B  
+ATOM     30  B   BEA A  30      28.959   0.239   0.000  1.00  0.00           B  
+ATOM     31  B   BEA A  31      29.956   0.162   0.000  1.00  0.00           B  
+TER      32      BEA A  31
+CONECT    1    2
+CONECT    2    1    3
+CONECT    3    2    4
+CONECT    4    3    5
+CONECT    5    4    6
+CONECT    6    5    7
+CONECT    7    6    8
+CONECT    8    7    9
+CONECT    9    8   10
+CONECT   10    9   11
+CONECT   11   10   12
+CONECT   12   11   13
+CONECT   13   12   14
+CONECT   14   13   15
+CONECT   15   14   16
+CONECT   16   15   17
+CONECT   17   16   18
+CONECT   18   17   19
+CONECT   19   18   20
+CONECT   20   19   21
+CONECT   21   20   22
+CONECT   22   21   23
+CONECT   23   22   24
+CONECT   24   23   25
+CONECT   25   24   26
+CONECT   26   25   27
+CONECT   27   26   28
+CONECT   28   27   29
+CONECT   29   28   30
+CONECT   30   29   31
+CONECT   31   30
