@@ -51,7 +51,7 @@ def add_noise(xy_coord_mat, amount):
     return noisy_signal
 
 
-def slice(xy_coord_mat, sample_n=100000):
+def slice(xy_coord_mat, sample_n=1000, wdft=0.1):
     """
     This function intersects a set of xy coordinates and records for each point the slices it
     intersects with. 
@@ -104,6 +104,9 @@ def slice(xy_coord_mat, sample_n=100000):
 
     points  = MultiPoint(np.stack(xy_coord_mat, axis=1))
     seg_mat = np.zeros((sample_n, len(points.geoms)))
+    segregation = np.zeros(len(points.geoms))
+    n_loci = xy_coord_mat.shape[1]
+    wdf_treshold = int(n_loci * wdft) # window detection frequency treshold (lower bound)
 
     #for iter in range(sample_n):
     iter = 0
@@ -111,19 +114,25 @@ def slice(xy_coord_mat, sample_n=100000):
         rand_y     = np.random.uniform(low=ymin_sample, high=ymax_sample)
         slice_ymin = rand_y - 0.5 * sample_height
         slice_ymax = rand_y + 0.5 * sample_height
-        slice      = box(sample_xmin, slice_ymin, sample_xmax, slice_ymax)
+        slice_      = box(sample_xmin, slice_ymin, sample_xmax, slice_ymax)
 
         rand_x     = np.random.uniform(low=xmin_sample, high=xmax_sample)
         rand_angle = np.random.uniform(-180, 180)
-        slice      = sa.rotate(slice, rand_angle, origin=(rand_x, rand_y))
-        x,y        = slice.exterior.xy
+        slice_      = sa.rotate(slice_, rand_angle, origin=(rand_x, rand_y))
+        x,y        = slice_.exterior.xy
 
         for p in range(len(points.geoms)):
-            seg_mat[iter, p] = slice.contains(points[p])
+            segregation[p] = slice_.contains(points[p])
+            #seg_mat[iter, p] = slice_.contains(points[p])
 
         # next iteration only if slice is non-empty (any True)
-        if seg_mat[iter, :].any():
+        if np.sum(segregation) > wdf_treshold:
+            # check if slice is a duplicate (no new information)
+            #if not any(np.equal(seg_mat, segregation).all(1)):
+            seg_mat[iter] = segregation
+            #if iter % 50 == 0: print(iter)
             iter = iter + 1
+            
 
             if plot:
                 plt.plot(x,y, linewidth = 0.1, color='k', fillstyle='full', alpha=0.01)
