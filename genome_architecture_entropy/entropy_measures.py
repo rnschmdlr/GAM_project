@@ -14,24 +14,41 @@ Requirements
 
 Functions
 ---------
-* shannon_entropy       - returns total entropy of a matrix
-* joint_entropy         - returns joint entropy of two variables in a matrix
-* all_joint_entropy     - returns joint entropy of all combination of row vectors in a matrix
-* mutual_information    - returns mutual information of a matrix given a joint entropy matrix
-* transfer_entropy      - returns transfer entropy of two probability distributions 
-* all_transfer_entropy  - returns transfer entropy of all combinations of probability distributions
+* shannon_entropy          - returns total entropy of a matrix
+* shannon_entropy_multivar - returns the entropy for each variable (row or col) of a matrix
+* joint_entropy            - returns joint entropy of two variables in a matrix
+* all_joint_entropy        - returns joint entropy of all combination of row vectors in a matrix
+* mutual_information       - returns mutual information of a matrix given a joint entropy matrix
+* transfer_entropy         - returns transfer entropy of two probability distributions 
+* all_transfer_entropy     - returns transfer entropy of all combinations of probability distributions
 """
 
 import numpy as np
+from scipy.stats import entropy
 import warnings
     
 
 def shannon_entropy(seg_mat):
     """Returns the total entropy of a matrix"""
     freq = np.unique(seg_mat, return_counts=True)[1] / np.prod(seg_mat.shape)
-    freq = freq[freq != 0] # drop 0 to avoid Nan resulting from log2
-    h = -np.sum(freq * np.log2(freq))
+    h = -np.sum(freq * np.log2(freq, out=np.zeros_like(freq), where=freq!=0))
+    
+    return h
 
+def corrected_shannon_entropy(matrix):
+    h = shannon_entropy(matrix)
+    corr_h = 1 - np.sqrt(1 - h ** 4/3)
+
+    return corr_h
+
+
+def shannon_entropy_multivar(matrix, axis):
+    """Returns the entropy for each variable (row or col) of a matrix"""
+    ones = np.apply_along_axis(np.sum, axis, matrix)
+    zeros = matrix.shape[axis] - ones
+    counts = np.vstack([ones, zeros]).T
+    h = entropy(counts, base=2, axis=axis)
+    
     return h
 
 
@@ -114,38 +131,119 @@ def mutual_information(je_mat):
     return mi_mat
 
 
-def transfer_entropy(pXY, pYY):
+def normalized_mutual_information(seg_mat, c=True):
+    je_mat = all_joint_entropy(seg_mat)
+    mi_mat = mutual_information(je_mat)
+    nloci = np.shape(mi_mat)[0]
+    nmi_mat = np.zeros_like(mi_mat)
+    entropy_list = shannon_entropy_multivar(seg_mat, 1)
+
+    for wy in range(nloci):
+        for wx in range(nloci):
+            hx = entropy_list[wx]
+            hy = entropy_list[wy]
+            norm = np.max([hx, hy])
+            # normalization
+            nmi_mat[wy,wx] = np.divide(mi_mat[wy,wx], norm, out=np.zeros_like(mi_mat[wy,wx]), where=norm!=0)
+            # corrected nmi
+            if c:
+                nmi_mat[wy,wx] = 1 - (1 - np.sqrt(nmi_mat[wy,wx]))**1.2315
+
+    return nmi_mat
+
+
+def transfer_entropy(pXY, pyYX, pyY):
     """Returns the transfer entropy of two probability distributions"""
-    #te = np.sum(pXY * np.log2(pXY / pYY)) # Schreiber et al. 2000
+    # Schreiber et al. 2000
 
     # where p(YY) is 0, p(XY) is implied to be 0 and the contribution of the log term is interpreted as 0 
-    pq_ratio = np.divide(pXY, pYY, out=np.zeros_like(pXY), where=pYY!=0)
-    
+    pq_ratio = np.divide(pyYX, pyY, out=np.zeros_like(pyYX), where=pyY!=0)
+
     # result is zero if pXY is 0 because lim_x->0+ xlog(x) = 0
-    te = np.sum(pXY * np.log2(pq_ratio, out=np.zeros_like(pq_ratio), where=pq_ratio!=0))
+    te = np.sum(pXY * np.sum(pyYX * np.log2(pq_ratio, out=np.zeros_like(pq_ratio), where=pq_ratio!=0), axis=1), axis=0)
 
     return te
 
 
-def all_transfer_entropy(trans_probs):
+def multivariate_transfer_entropy_(transition_pmat):
+    n_loci = transition_pmat.shape[0]
+    n_tsteps = transition_pmat.shape[2]
+    te_mat = np.zeros(shape=(n_loci, n_loci))
+
+    for loc1 in range(n_loci):
+        YY = transition_pmat[loc1, loc1, :, :]
+        for loc2 in range(n_loci):
+            XY = transition_pmat[loc1, loc2, :, :]
+
+            P = transition_pmat[loc1, loc2]
+            p = 1
+            p1 = np.linalg.matrix_power(P, p)
+            p2 = np.linalg.matrix_power(P, p+1)
+            # find the stationary distribution by increasing the power until no further change
+            while not np.allclose(p1,p2) and not (p1==0).all() and not p > 100: 
+                p += 1
+                p1 = np.linalg.matrix_power(p1, p)
+                p2 = np.linalg.matrix_power(p1, p+1)
+            p1 = np.ones((n_tsteps))
+            te_mat[loc1,loc2] = transfer_entropy(p1, XY, YY)
+
+    return te_mat
+
+
+def multivariate_transfer_entropy(transition_pmat):
     """Returns the transfer entropy of all combinations of probability distributions"""
-    # rolls the bin*bin nested array to the front 
-    probs = np.moveaxis(trans_probs, (2,3), (0,1)) 
-    # remove upper and lower triangular repr. long time intervals with k+1 history length as diagonal cutoff
-    #probs = probs - np.triu(probs, k_history+1) - np.tril(probs, -k_history-1)
-    bins = probs.shape[0]
-    te_mat = np.zeros((bins, bins))
+    # compute stationary distribution over all states by increasing the power until no further change
+    n_loci = transition_pmat.shape[2]
+    n_tsteps = transition_pmat.shape[0]
+    stat_dist = np.zeros(shape=(n_tsteps, n_tsteps, n_loci, n_loci))
 
-    for bin1 in range(0, bins):
-        for bin2 in range(0, bins):
-            #pYY = probs[bin2, bin2]
-            
-            # use the larger bin to avoid pYY actually being pXX
-            pYY = probs[max(bin1, bin2), max(bin1, bin2)]
-            pXY = probs[bin1, bin2]
-            #print('pXY', pXY, pYY', pYY, sep='\n')
-            te_mat[bin1, bin2] = transfer_entropy(pXY, pYY)
+    for t1 in range(n_tsteps):
+        for t2 in range(n_tsteps):
+            P = transition_pmat[t1,t2]
+            p = 1
+            p1 = np.linalg.matrix_power(P, p)
+            p2 = np.linalg.matrix_power(P, p+1)
+            # find the stationary distribution by increasing the power until no further change
+            while not np.allclose(p1,p2) and not (p1==0).all() and not p > 100: 
+                p += 1
+                p1 = np.linalg.matrix_power(p1, p)
+                p2 = np.linalg.matrix_power(p1, p+1)
+            stat_dist[t1,t2] = p1
 
+            # 
+            #YY = np.diag(transition_pmat[t1, t2])
+            #XY = np.sum(transition_pmat[t1,t2], axis=1) 
+
+            #for loc1 in range(n_loci):
+            #    #YY = np.sum(transition_pmat[t1, t2, loc1, loc1], axis=0)
+            #    for loc2 in range(n_loci):
+            #        #XY = np.sum(transition_pmat[t1,t2, loc1, loc2])
+            #        te_mat[loc1,loc2] = transfer_entropy(stat_dist[t1,t2], XY, YY)
+
+    # rolls the loci bin*bin nested array to the front 
+    transition_pmat_inner = np.moveaxis(transition_pmat, (2,3), (0,1)) 
+    stat_dist_inner = np.moveaxis(stat_dist, (2,3), (0,1))
+    te_mat = np.zeros(shape=(n_loci, n_loci))
+
+    for loc1 in range(n_loci):
+        yY = transition_pmat_inner[loc1, loc1]
+
+        for loc2 in range(n_loci):
+            yXY = transition_pmat_inner[loc1, loc2]
+
+            #pyY = np.sum(yY, axis=0, dtype=np.float64)
+            #pyXY = np.sum(yXY, axis=0, dtype=np.float64)
+            #pXY = np.ones_like(pyXY)
+            pXY = stat_dist_inner[loc1, loc2]
+            pXY = np.ones((n_tsteps))
+            te_mat[loc1, loc2] = transfer_entropy(pXY, yXY, yY)
+
+    #print(t1, t2, '\n')
+    #print('p1: ', p1)
+    #print(YY, YY.shape, '\n')
+    #print(XY, XY.shape, '\n')
+    #print(stat_dist[t1,t2], stat_dist[t1,t2].shape, '\n')
+   
     return te_mat
             
 
@@ -170,14 +268,3 @@ def npmi_2d_fast(region1, region2):
         pmi = np.log2(pXY / pXpY)
         npmi = pmi / -np.log2(pXY)
     return npmi
-
-
-def pmi_2d_fast(region1, region2):
-
-    M = region1.shape[1]
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        pXY = region1.dot(region2.T) / M
-        pXpY = (region1.sum(1).reshape(-1, 1) / M) * (region2.sum(1) / M)
-        pmi = np.log2(pXY / pXpY)
-    return pmi
