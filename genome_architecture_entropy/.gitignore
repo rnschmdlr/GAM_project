@@ -1,0 +1,7 @@
+/data/
+
+/toymodel/*
+!/toymodel/md_soft/out/
+!/toymodel/*.py
+
+!
