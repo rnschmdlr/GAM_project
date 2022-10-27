@@ -1,26 +1,23 @@
 # %%
 '''Import'''
-#import os
-#os.chdir('/Users/pita/Documents/Rene/GAM_project/genome_architecture_entropy/')
+import os
+os.chdir('/Users/pita/Documents/Rene/GAM_project/genome_architecture_entropy/src/')
 
 import scipy
 import numpy as np
-import pandas as pd
+import pandas as pd; pd.set_option("display.precision", 2)
 import seaborn as sns
 from matplotlib import pyplot as plt
 from tqdm.auto import tqdm
 import libpysal
 from esda.moran import Moran
 from atpbar import atpbar, register_reporter, find_reporter, flush
-import multiprocessing
-multiprocessing.set_start_method('fork', force=True)
+import multiprocessing ;multiprocessing.set_start_method('fork', force=True)
 
 import compute_transfer_entropy as em
 import toymodel.sampling
 import transition as tb
 import plotting
-
-pd.set_option("display.precision", 2)
 
 
 def lexographic_permutations(length, sequence):
@@ -114,7 +111,7 @@ def vn_eig_entropy(rho):
 
 # %%
 '''Load model'''
-path_model = '/data/toymodels/model4/'
+path_model = '../data/toymodels/model4/'
 model = 'toymodel4_2_multi500'
 series = np.load(path_model + model + '.npy')
 
@@ -156,7 +153,7 @@ if n_realisations > 1:
     series = np.reshape(series, newshape=(n_realisations * n_timesteps, n_loci, 2), order='F') 
     print('>> transformed model')
 
-n_cut = 3
+n_cut = 4
 series = series[n_realisations * n_cut:]# -n_realisations * n_cut]
 n_timesteps -= (n_cut)
 print('>> removed', n_cut, 'timesteps for a total of', n_timesteps)
@@ -255,8 +252,8 @@ df_
 
 # %%
 '''Transfer Entropy calculation and plotting'''
-seq = [0, 2, 4, 1, 3, 5, 6]
-seg_mats_ = seg_mats[np.array(seq),:,:]; print('Sequence = ', seq)
+seq = [3,2,1,0,6,5,4]
+seg_mats_ = seg_mats#[np.array(seq),:,:]; print('Sequence = ', seq)
 hist_len = 7
 
 # backwards time order
