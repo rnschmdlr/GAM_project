@@ -1,4 +1,5 @@
 # %%
+import os
 import numpy as np
 import pandas as pd
 import subprocess
@@ -6,6 +7,9 @@ from pathlib import Path
 from Bio.PDB import PDBIO
 from Bio.PDB import Selection
 from Bio.PDB.PDBParser import PDBParser
+
+os.chdir('/Users/pita/Documents/Rene/GAM_project/genome_architecture_entropy/toymodel/')
+import chaingen_topdb as gen
 
 path_cwd        = Path.cwd()
 path_restraints = str(path_cwd / 'md_soft/restraints/')
@@ -20,12 +24,12 @@ def init_tads(seeds):
     # initialize tad boundaries +1, -1 of seed locs
     for i in range(seeds.shape[0]):
         if i == 0:
-            tads = np.array([seeds[i]-1, seeds[i]+1])
+            tads = np.array([[seeds[i]-1, seeds[i]+1]])
         else:
             tad = np.array([seeds[i]-1, seeds[i]+1])
             tads = np.vstack((tads, tad))
 
-    return(tads)
+    return tads
 
 
 def write_tads_to_file(tads, num):
@@ -34,47 +38,54 @@ def write_tads_to_file(tads, num):
     file_restraint = path_restraints + '/restraint%d.rst' % (num)
 
     with open(file_restraint, 'w') as f:
-        for tad in restraints:
-            tad.insert(0, ':')
-            tad.insert(2, ' :')
+        for boundary in restraints:
+            boundary.insert(0, ':')
+            boundary.insert(2, ' :')
             #tad.append(' >>')
-            print(*tad, sep='', end='\n', file=f)
-            #print(*tad, sep='')
+            print(*boundary, sep='', end='\n', file=f)
+            #print(*boundary, sep='')
 
     return None
 
 
-def generate_boundary_sequence(tads, lbound=1, rbound=35):
-    flag = 0 #const
-    cond = True
+def generate_boundary_sequence(tads, steps, lbound, rbound):
     iterations = 0
+    n_tads = tads.shape[0]
+    flag = np.zeros(shape=n_tads)
 
-    # move boundaries by 1 in either direction. outer loop: ensemble of tads
-    while cond: 
-        # breaks when no boundaries were moved, e.g. all flags are true
-        if flag == tads.shape[0]:
-            cond = False
-        flag = 0 # reset flag
+    # need to check iteratively due to different types (int, None)
+    for iteration in steps:
+        l = len(iteration)
+        max_len = max(l, len(iteration))
 
+    #outer loop: simultaneous restraint changes; inner loop: individual, boundary conditions
+    for iteration in steps:
         write_tads_to_file(tads, iterations)
+        iterations += 1
 
-        #inner loop: each tad, boundary conditions
-        for tad in range(tads.shape[0]):
+        for tad in iteration:
+            # no new restraint
+            if tad == None:
+                continue
+
             left_space = False
             right_space = False
             dist_forw = False
             dist_back = False
 
-            # check spaces depending on position (first, last, any)
-            if tad == 0:
+            # check spaces depending on position (only, first, last, any)
+            if tads.shape[0] == 1:
                 left_space = tads[tad][0] > lbound
-                dist_forw = (tads[tad+1][0] - tads[tad][1]) > 2
-            elif tad == tads.shape[0]-1:
                 right_space = tads[tad][1] < rbound
-                dist_back = (tads[tad][0] - tads[tad-1][1]) > 2
+            elif tad == 0:
+                left_space = tads[tad][0] > lbound
+                dist_forw = (tads[tad+1][0] - tads[tad][1]) > 1
+            elif tad == max_len:
+                right_space = tads[tad][1] < rbound
+                dist_back = (tads[tad][0] - tads[tad-1][1]) > 1
             else:
-                dist_forw = tads[tad+1][0] - tads[tad][1] > 2
-                dist_back = tads[tad][0] - tads[tad-1][1] > 2
+                dist_forw = tads[tad+1][0] - tads[tad][1] > 1
+                dist_back = tads[tad][0] - tads[tad-1][1] > 1
 
             # check space requirements and grow tads
             if left_space and dist_forw:
@@ -86,6 +97,10 @@ def generate_boundary_sequence(tads, lbound=1, rbound=35):
                 tads[tad][1] = tads[tad][1] + 1
 
             elif dist_forw and dist_back:
+                tads[tad][0] = tads[tad][0] - 1
+                tads[tad][1] = tads[tad][1] + 1
+
+            elif left_space and right_space:
                 tads[tad][0] = tads[tad][0] - 1
                 tads[tad][1] = tads[tad][1] + 1
 
@@ -102,9 +117,10 @@ def generate_boundary_sequence(tads, lbound=1, rbound=35):
                 tads[tad][0] = tads[tad][0] - 1
 
             else: 
-                flag = flag + 1        
-        
-        iterations += 1
+                flag[tad] = 1
+
+            if flag.all():
+                break
 
     return iterations
 
@@ -139,70 +155,99 @@ def translocate_xy(pdb_input, pdb_output):
         pdb_input_file_edited.writelines(list_of_lines[36:])
 
         
-def run_sim(series_len, chain_len):
+def run_sim(series_len, chain_len, pdb_init):
     colspecs = [(0, 6), (6, 11), (12, 16), (16, 17), (17, 20), (21, 22), (22, 26),
                     (26, 27), (30, 38), (38, 46), (46, 54), (54, 60), (60, 66), (76, 78), (78, 80)]
     cols = ['x','y']
     names = ['ATOM', 'serial', 'name', 'altloc', 'resname', 'chainid', 'resseq',
                 'icode', 'x', 'y', 'z', 'occupancy', 'tempfactor', 'element', 'charge']
     path_min_pdb = path_out + '/min_struct.pdb'
-
-    # run md_soft with args: python run.py -c config.ini
-    cmd = ['python', path_run_mdsoft, '-c', path_config]
     cmd = 'python ' + path_run_mdsoft + ' -c ' + path_config
-
-    global xy_series 
-    xy_series = np.empty((series_len+1, chain_len, 2))
+    series = np.empty((series_len+1, chain_len, 2))
 
     for state in range(series_len):
         # replace restraints and input structure paths in config file
         with open(path_config, 'r') as config_file:
             list_of_lines = config_file.readlines()
-
         list_of_lines[18] = 'HR_RESTRAINTS_PATH =' + path_restraints + '/restraint%d.rst\n' % (state)
-
         # for state 0 the initial structure is chosen. After that the new minimized structures are used.
         if state > 0:
             list_of_lines[2] = 'INITIAL_STRUCTURE_PATH =' + path_min_pdb + '\n'
         else:
-            list_of_lines[2] = 'INITIAL_STRUCTURE_PATH =' + path_ini_struct + '\n'
+            list_of_lines[2] = 'INITIAL_STRUCTURE_PATH =' + pdb_init + '\n'
         with open(path_config, 'w') as config_file:
             config_file.writelines(list_of_lines)
 
+        # run md_soft with args: python run.py -c config.ini
         subprocess.run(cmd, shell=True)
 
         # this adds the initial structure as T=0 to the coordinate array first
-        if state == 0:
-            pdb = pd.read_fwf(path_ini_struct, names=names, colspecs=colspecs, usecols=lambda x: x  in cols).dropna()
-            xy_series[state,:,:] = np.array(pdb, dtype=float)
+        #if state == 0:
+        #    pdb = pd.read_fwf(pdb_init, names=names, colspecs=colspecs, usecols=lambda x: x  in cols).dropna()
+        #    series[state,:,:] = np.array(pdb, dtype=float)
 
         pdb = pd.read_fwf(path_min_pdb, names=names, skiprows=[0], colspecs=colspecs, usecols=lambda x: x  in cols).dropna()
-        xy_series[state+1,:,:] = np.array(pdb, dtype=float)
-        '''
-        if state != 0:
-            translocate_xy(path_ini_struct, path_min_pdb)
-        '''
-    return xy_series
+        series[state+1,:,:] = np.array(pdb, dtype=float)
+
+    return series
 
 
 if __name__ == '__main__': 
-    # seed:
-    #    |            |   |   |
-    # initialize boundaries
-    #    ||          ||  ||   ||
-    # generation
-    #   | |        |  | |  | |   |
-    # |     |    |     ||   ||    |
-    #|        ||       ||   ||    |
-    # stop when no ops possible
+    # toymodel4_2: 1 longer loop with a unique realisation per slice
+    chain_len = 31
+    tad_seeds = np.array([15])
+    steps = [[0] for i in range(15)]
+    # toymodel5: 2 loops with variable number of realisations per time step
+    #chain_len = 31
+    #tad_seeds = np.array([8, 23])
+    #steps = [[0],[0,1],[0],[0,1],[0],[0,1],[None],[1],[None],[1],[None],[1],[None]]
+    realisations = 500
+    series = np.zeros(shape=(realisations, len(steps)+1, chain_len, 2))
 
-    tad_seeds = np.array([7, 20, 31]) 
-    chain_len = 36 # need to change first_initial_structure.pdb first!
-    tads_initial = init_tads(tad_seeds)
-    series_len = generate_boundary_sequence(tads_initial)
-    run_sim(series_len, chain_len)
+    for itr in range(realisations):
+        # initialise coordinates to pdb input file 
+        coords = gen.self_avoiding_random_walk(chain_len)
+        file_name = 'md_soft/initial_structure%d.pdb' % (itr)
+        pdbfile = str(path_cwd / file_name)
+        gen.save_points_as_pdb(coords, pdbfile)
 
-    file = path_out + '/toymodel.npy'
-    np.save(file, xy_series)
+        # start model generation
+        tads_initial = init_tads(tad_seeds)
+        timesteps = generate_boundary_sequence(tads_initial, steps, lbound=1, rbound=31)
+        series[itr] = run_sim(timesteps, chain_len, pdbfile)
 
+    series_grouped = np.reshape(series, newshape=(realisations * (timesteps+1), chain_len, 2), order='F')
+    series_indiv = np.reshape(series, newshape=(realisations * (timesteps+1), chain_len, 2), order='C')
+    flpath = path_out + '/toymodel4_2_multi_500.npy'
+    np.save(flpath, series)
+
+    # toymodel1
+    #tad_seeds = np.array([7, 20, 31]) 
+
+    # toymodel2: different loop extrusion rates
+    #tad_seeds = np.array([10, 20, 28]) 
+    #steps = []
+    #for loci in range(1, chain_len + 1):
+    #    if loci % 2 == 0:
+    #        steps.append(1)
+    #    if loci % 3 == 0:
+    #        steps.append(2)
+    #    steps.append(0)
+
+    # toymodel3: different extrusion start times
+    #tad_seeds = np.array([5, 25])
+    #steps = [[0],[0],[0],[0],[0],[0],[0,1],[0,1],[0,1],[0,1],[0,1],[1],[1],[1],[1],[1],[1]]
+
+    
 # %%
+'''Quick coordinate viewer'''
+from matplotlib import pyplot as plt
+
+plt.rcParams["figure.figsize"] = (6,3)
+plt.rcParams['figure.dpi'] = 80
+
+for realisation in range(series.shape[0]):
+    for state in range(series.shape[1]):
+        plt.plot(series[realisation].T[0,:,state], series[realisation].T[1,:,state], '-k')
+    plt.show()
+    plt.clf()
