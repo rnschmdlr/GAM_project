@@ -2,8 +2,8 @@
 'Imports'
 import numpy as np
 import entropy_measures as em
-import toymodel.trans_probs as tb
-#from tqdm.auto import tqdm
+import toymodel.trans_probs_new as tb
+from tqdm.auto import tqdm
 from matplotlib import pyplot as plt
 from atpbar import atpbar, register_reporter, find_reporter, flush
 
@@ -55,9 +55,8 @@ def test(X, Y, hist_len):
     nbin = 2*param
 
     process = np.dstack((X,Y)).reshape(length, 1, 2*param, order='F')
-    sequence = np.linspace(0, length-1, length)
-    probs = tb.bin_probs(process, sequence, nbin, hist_len)
-    te_mat = em.all_transfer_entropy(probs)
+    probs = tb.bin_probs(process, nbin, hist_len)
+    te_mat = em.all_transfer_entropy(probs, hist_len)
     te_yx = np.sum(te_mat[:param, param:]) #np.sum(np.triu(te_mat))
     te_xy = np.sum(te_mat[param:, :param]) #np.sum(np.tril(te_mat))
     te_net_xy = te_xy - te_yx
@@ -71,11 +70,11 @@ def permutation_test(length, param, xself_dep, rep, hist_len, nperm=100):
     perm_res = np.zeros(shape=(nperm , 1))
     res = np.zeros(shape=(rep, 2))
 
-    for j in atpbar(range(rep), name = multiprocessing.current_process().name):
+    for j in range(rep):#, name = multiprocessing.current_process().name):
     #for j in range(rep):
         X, Y = create_cont_series(length, param, xself_dep, yran)
         
-        if True: #(j == 0) and param < 11:
+        if (j == 0) and param < 11:
             plt.plot(np.linspace(0, length, length+1), X, label = "X")
             plt.plot(np.linspace(0, length, length+1), Y, label = "Y", linestyle='dotted')
             #plt.legend()
@@ -88,13 +87,19 @@ def permutation_test(length, param, xself_dep, rep, hist_len, nperm=100):
             X_perm = np.random.permutation(X)
             perm_res[perm] = test(X_perm, Y, hist_len)
 
+        #plt.plot(np.linspace(0, length, length+1), X_perm, label = "X")
+        #plt.plot(np.linspace(0, length, length+1), Y, label = "Y", linestyle='dotted')
+        #plt.legend()
+        #plt.show()
+
         perm_mean = np.mean(perm_res)
+        print(perm_mean)
 
         # two sided p-test: surrogate TE larger/smaller than original in percent
         proportion_myte_left = (perm_res >= res[j, 0]).sum() / rep
         #proportion_myte_right = (perm_res <= res[j, 0]).sum() / rep
-        res[j, 1] = int(proportion_myte_left < alpha )
-        res[j, 0] = res[j, 0] - perm_mean
+        res[j, 1] = int(proportion_myte_left < alpha)
+        res[j, 0] = res[j, 0] #- perm_mean # effectie TE
 
     return res
 
@@ -130,15 +135,18 @@ def grid_search(rep, nperm):
 # %% 
 'Compute TE of lin. dependent process X -> Y'
 
-length = 10
-param = 4
-xself_dep = 0.95
-global yran; yran = 0
+length = 100
+param = 5
+xself_dep = 0.7
+global yran; yran = 0.15
 global hist_len; hist_len = 1
 
+plt.rcParams["figure.figsize"] = (8,4)
+plt.rcParams['figure.dpi'] = 100
+
 rep = 5 # number of iterations
-nperm = 10 # number of permutations for signficance testing
-'''
+nperm = 5 # number of permutations for signficance testing
+
 res = permutation_test(length, param, xself_dep, rep, hist_len, nperm)
 print(res)
 
@@ -147,11 +155,11 @@ if rep > 1:
     print('std =', np.around(np.std(res, axis=0)[0], 4))
     print('signif. ratio =', np.sum(res, axis=0)[1] / rep)
 print('\nlength =', length, '; n parameter =', param, '; history length = ', hist_len, ';\nX self-dependency =', xself_dep, '; Y randomness =', yran)
-'''
 
-grid, meffTE = grid_search(rep, nperm)
-np.save('/Users/pita/Documents/Rene/GAM_project/genome_architecture_entropy/grid.npy', grid)
-np.save('/Users/pita/Documents/Rene/GAM_project/genome_architecture_entropy/mean_eff_TE.npy', meffTE)
+
+#grid, meffTE = grid_search(rep, nperm)
+#np.save('/Users/pita/Documents/Rene/GAM_project/genome_architecture_entropy/grid.npy', grid)
+#np.save('/Users/pita/Documents/Rene/GAM_project/genome_architecture_entropy/mean_eff_TE.npy', meffTE)
 
 #np.save('~/grid.npy', grid)
 #np.save('~/mean_eff_TE.npy', meffTE)
