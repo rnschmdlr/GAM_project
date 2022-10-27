@@ -22,8 +22,8 @@ Functions
 
 import numpy as np
 
-import toymodel.conf_space as cs
-import plotting.plot_small_data as psd
+import toymodel.sampling as cs
+import plotting as plot
 
 
 def series_conf_space(conf_length, start_coords, end_coords):
@@ -59,7 +59,7 @@ def series_conf_space(conf_length, start_coords, end_coords):
         realizations[t] = np.average(states, axis=0, weights=weights)
         realizations[t] = cs.add_noise(realizations[t], 0.08)
         seg_mats[t] = cs.slice(realizations[t], 0, 36, -5, 5)
-        #psd.plot_xy(realizations[t], 0,35,-10,10)
+        #plot.plot_xy(realizations[t], 0,35,-10,10)
 
     return seg_mats
 

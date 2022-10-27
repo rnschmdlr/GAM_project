@@ -8,15 +8,15 @@ from Bio.PDB import PDBIO
 from Bio.PDB import Selection
 from Bio.PDB.PDBParser import PDBParser
 
-os.chdir('/Users/pita/Documents/Rene/GAM_project/genome_architecture_entropy/toymodel/')
-import chaingen_topdb as gen
+os.chdir('/Users/pita/Documents/Rene/GAM_project/genome_architecture_entropy/data/')
+import chaingen as gen
 
 path_cwd        = Path.cwd()
 path_restraints = str(path_cwd / 'md_soft/restraints/')
-path_out        = str(path_cwd / 'md_soft/out/')
+path_out        = str(path_cwd / 'md_soft/')
 path_config     = str(path_cwd / 'md_soft/config.ini')
 path_ini_struct = str(path_cwd / 'md_soft/initial_structure.pdb')
-path_run_mdsoft = str(path_cwd.parents[1] / 'md_soft/run.py')
+path_run_mdsoft = str(path_cwd.parents[0] / '/ext/md_soft/run.py')
 
 
 

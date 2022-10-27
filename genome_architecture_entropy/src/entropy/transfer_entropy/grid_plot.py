@@ -5,7 +5,7 @@ import matplotlib.lines as lines
 import seaborn as sns
 import itertools
 
-grid = np.load('/Users/pita/Documents/Rene/GAM_project/genome_architecture_entropy/grid.npy')
+grid = np.load('/Users/pita/Documents/Rene/GAM_project/genome_architecture_entropy/data/results/grid_search.npy')
 series_lengths = [5, 10, 20, 40]
 num_params = [1, 5, 10, 20]
 self_dep = [0.0, 0.2, 0.4, 0.8]

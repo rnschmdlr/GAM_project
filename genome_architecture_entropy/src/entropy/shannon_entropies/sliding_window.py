@@ -4,8 +4,8 @@ import numpy as np
 import pandas as pd
 from tqdm.auto import tqdm
 
-import entropy_measures as em
-import plotting.plot_large_data as plot
+import compute_2d_entropies as em
+import plotting as plot
 
 
 def load_data(filename):
@@ -207,7 +207,7 @@ def sliding_window_measures(segreg_data, start, end, step, size_range, methods):
 
 # %%
 '''Load data'''
-seg_mat = load_data('/Users/pita/Documents/Rene/GAM_project/data/Curated_GAM_mESCs_46C_real_1NP_at50000.passed_qc_fc5_cw6_s11.table')
+seg_mat = load_data('/Users/pita/Documents/Rene/GAM_project/genome_architecture_entropy/data/experimental/Curated_GAM_mESCs_46C_real_1NP_at50000.passed_qc_fc5_cw6_s11.table')
 
 
 # %% 

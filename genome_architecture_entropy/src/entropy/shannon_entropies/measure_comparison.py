@@ -4,114 +4,13 @@ import os
 import numpy as np
 import pandas as pd
 import seaborn as sns
-import pathlib
 from matplotlib import pyplot as plt, colors
 from scipy.spatial import distance
 from tqdm.auto import tqdm
 
-import cosegregation_internal as ci
-import entropy_measures as em
-import toymodel.conf_space as cs
-
-path_series_out = str(pathlib.Path.cwd() / 'toymodel/out/')
-
-
-def plot_ensemble(coords_model, je_mat, mi_mat, coseg_mat, title, entropy, color_points, vmax, *args):
-    '''2x2 plot fxn'''
-    # Generate a mask for the upper triangle from value shape, k=1 to see diagonal line in heatmap
-    mask_shape = (je_mat.shape[1], je_mat.shape[1])
-    mask = np.triu(np.ones(mask_shape, dtype=bool), k=0)
-
-    # style and colors
-    sns.set_theme(style='white')
-    cmap = sns.color_palette('flare', as_cmap=True)
-    scatter_cmap = sns.color_palette('dark:dodgerblue_r', as_cmap=True)
-    sm = plt.cm.ScalarMappable(cmap=sns.color_palette('dark:dodgerblue', as_cmap=True))
-
-    # dynamic coordinate boundaries
-    xmin = np.min(coords_model[0])
-    xmax = np.max(coords_model[0])
-    ymin = np.min(coords_model[1])
-    ymax = np.max(coords_model[1])
-    height = ymax - ymin
-    width = xmax - xmin
-    
-    if max(height, width) == width:
-        ymax = 1/2 * width
-        ymin = -1/2 * width
-        f = 0.08 * width # spacing factor
-    else:
-        xmax = 1/2 * height
-        xmin = -1/2 * height
-        f = 0.08 * height
-
-    dyn_boundaries = [xmin - f, xmax + f, ymin - f, ymax + f]
-
-    #static coordinate boundaries
-    xnum = coords_model.shape[1]
-    f = 0.08 * xnum
-    ymin = -1/2 * xnum
-    ymax = 1/2 * xnum
-    boundaries = [0 - f, xnum + f, ymin - f, ymax + f]
-    #boundaries = np.mean( np.array([ dyn_boundaries, static_boundaries ]), axis=0 )
-
-    # set figure
-    fig, (ax1, ax2) = plt.subplots(2, 2)
-    fig.set_size_inches(12, 10)
-    fig.suptitle(title, fontsize=25, weight='bold')
-    
-    # set coordinate plot
-    ax1[0].plot(coords_model[0], coords_model[1], '-k') 
-    ax1[0].scatter(coords_model[0], coords_model[1], s=50, c=color_points, cmap=scatter_cmap)
-    ax1[0].axis(boundaries)
-    ax1[0].tick_params(labelleft=False, labelbottom=False)
-    ax1[0].set_title('Chromatin model colored by accumulated MI', loc='left', fontsize=16)
-    ax1[0].axis('off')
-    plt.colorbar(sm, ax=ax1[0], shrink=0.5).outline.set_visible(False)
-
-    # set 3 heatmap plots
-    ax1[1].set_title('Mutual Information (MI)', loc='left', fontsize=16)
-    ax1[1].tick_params(labelleft=False, labelbottom=False)
-    sns.heatmap(mi_mat,
-                ax=ax1[1],
-                mask=mask,
-                cmap=cmap,
-                robust=True,
-                square=True,
-                linewidths=0,
-                cbar_kws={"shrink": .5},
-                vmax=vmax[0],
-                vmin=0)
-    
-    ax2[0].set_title('Linkage disequilibirum (LD)', loc='left', fontsize=16)
-    ax2[0].tick_params(labelleft=False, labelbottom=False)
-    sns.heatmap(coseg_mat,
-                ax=ax2[0],
-                mask=mask, 
-                cmap=cmap, 
-                robust=True, 
-                square=True, 
-                linewidths=0,
-                cbar_kws={"shrink": .5},
-                vmax=vmax[1])
-    
-    ax2[1].set_title('Normalized difference (LD - MI)', loc='left', fontsize=16)
-    ax2[1].tick_params(labelleft=False, labelbottom=False)
-    sns.heatmap(je_mat,
-                ax=ax2[1],
-                mask=mask, 
-                cmap=cmap, 
-                robust=True, 
-                square=True, 
-                linewidths=0,
-                cbar_kws={"shrink": .5},
-                vmax=vmax[2],
-                vmin=0)
-
-    plt.figtext(0.4, 0.05, 'Global entropy H = '+entropy, fontsize=14)
-    plt.savefig(path_series_out + args[0], dpi=100)
-    plt.close(fig)
-
+import compute_2d_entropies as em
+import toymodel.sampling as cs
+import plotting as plot
 
 
 # %% 
@@ -219,7 +118,7 @@ mi_dist_mat = em.mutual_information(je_dist_mat)
 color_line = [str(np.abs(item/np.max(diff_h_chain))) for item in diff_h_chain]
 # color_points = [str(1-3*(1-(item/np.max(win_h_chain)))) for item in win_h_chain]
 color_points = [str(1-np.abs(item/np.max(mi_dist_mat))) for item in mi_dist_mat[0]]
-plot_ensemble(new_coords_model, 
+plot.plot_ensemble(new_coords_model, 
             je_dist_mat, 
             mi_dist_mat, 
             np.empty(shape=(n_slice, 36)), #TODO
@@ -236,8 +135,8 @@ n_slice = 20000
 seg_mat = cs.slice(new_coords_model, n_slice)
 
 # calculate normalized linkage disequilibrium
-coseg_mat_raw = ci.dprime_2d(seg_mat.T.astype(int), seg_mat.T.astype(int))
-coseg_mat = coseg_mat_raw[coseg_mat_raw < 0] = 0
+#coseg_mat_raw = ci.dprime_2d(seg_mat.T.astype(int), seg_mat.T.astype(int))
+#coseg_mat = coseg_mat_raw[coseg_mat_raw < 0] = 0
 
 # calculating shannon-, differential-, joint- entropy and mutual information
 entropy = str(np.around(em.shannon_entropy(seg_mat), 2))
@@ -249,38 +148,11 @@ mi_mat = mi_mat - np.diag(np.diag(mi_mat))
 mi_sum = np.sum(mi_mat, axis=0)
 color_points = [1 - np.abs(item / np.max(mi_sum)) for item in mi_sum]
 
-plot_ensemble(new_coords_model, 
+plot.plot_ensemble(new_coords_model, 
             je_mat, 
             mi_mat, 
-            coseg_mat,
+            #coseg_mat,
             'Segregation analysis', 
-            entropy, 
-            color_points)
-
-
-
-# %% 
-'''Compare coseg_mat to mutual information'''
-# diagonal has to be removed to norm the values of interest
-coseg_mat = coseg_mat - np.diag(np.diag(coseg_mat))
-coseg_mat = coseg_mat - coseg_mat.min()
-coseg_mat = coseg_mat / coseg_mat.max()
-mi_mat = mi_mat - mi_mat.min()
-mi_mat = mi_mat / mi_mat.max()
-
-diff = (coseg_mat - mi_mat) / coseg_mat
-
-coseg_mat_raw = coseg_mat_raw - np.diag(np.diag(coseg_mat_raw))
-coseg_mat_raw = coseg_mat_raw - coseg_mat_raw.min()
-coseg_mat_raw = coseg_mat_raw / coseg_mat_raw.max()
-coseg_mat_sum = np.sum(coseg_mat_raw, axis=0)
-color_points = [1 - np.abs(item / np.max(coseg_mat_sum)) for item in coseg_mat_sum]
-
-plot_ensemble(new_coords_model, 
-            diff, 
-            mi_mat, 
-            coseg_mat,
-            'Segregation comparison', 
             entropy, 
             color_points)
 
@@ -295,7 +167,7 @@ low_res_coords_model = np.array([new_coords_model_mixed_xy[0::4], new_coords_mod
 seg_mat_low = cs.slice(low_res_coords_model, 0, 10, -5, 5, n_slice)
 
 # calculate normalized linkage disequilibrium
-coseg_mat = ci.dprime_2d(seg_mat_low)
+#coseg_mat = ci.dprime_2d(seg_mat_low)
 
 # calculating shannon-, differential-, joint- entropy and mutual information
 entropy = str(np.around(em.shannon_entropy(seg_mat_low), 2))
@@ -306,7 +178,7 @@ h_max = np.max([je_mat, mi_mat])
 
 color_line = [str(np.abs(item/np.max(diff_h_low))) for item in diff_h_low]
 color_points = [str(1-np.abs(item/np.max(mi_mat_low))) for item in mi_mat_low[0]]
-plot_ensemble(low_res_coords_model, 
+plot.plot_ensemble(low_res_coords_model, 
             je_mat_low, 
             mi_mat_low, 
             'Segregation analysis (low-res)', 
@@ -331,13 +203,9 @@ plt.title('Differential Entropy between pairs of loci (abs, normalized)', loc='l
 
 
 
-
 # %% 
 '''Quick coordinate viewer'''
-import os
-from matplotlib import pyplot as plt
-os.chdir('/Users/pita/Documents/Rene/GAM_project/genome_architecture_entropy/')
-series = np.load('toymodel/md_soft/out/toymodel.npy')
+series = np.load('data/toymodels/model1/toymodel1.npy')
 
 for state in range(series.shape[0]):
     coords_model = series[state].T

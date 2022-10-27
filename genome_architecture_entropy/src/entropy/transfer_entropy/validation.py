@@ -1,8 +1,8 @@
 # %%
 'Imports'
 import numpy as np
-import entropy_measures as em
-import toymodel.trans_probs_new as tb
+import compute_transfer_entropy as em
+import trans_probs as tb
 from tqdm.auto import tqdm
 from matplotlib import pyplot as plt
 from atpbar import atpbar, register_reporter, find_reporter, flush
@@ -56,7 +56,7 @@ def test(X, Y, hist_len):
 
     process = np.dstack((X,Y)).reshape(length, 1, 2*param, order='F')
     probs = tb.bin_probs(process, nbin, hist_len)
-    te_mat = em.all_transfer_entropy(probs, hist_len)
+    te_mat = em.multivariate_transfer_entropy(probs)
     te_yx = np.sum(te_mat[:param, param:]) #np.sum(np.triu(te_mat))
     te_xy = np.sum(te_mat[param:, :param]) #np.sum(np.tril(te_mat))
     te_net_xy = te_xy - te_yx

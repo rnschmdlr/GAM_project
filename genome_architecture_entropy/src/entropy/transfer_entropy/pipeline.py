@@ -1,75 +1,26 @@
 # %%
 '''Import'''
-import os
-os.chdir('/Users/pita/Documents/Rene/GAM_project/genome_architecture_entropy/')
+#import os
+#os.chdir('/Users/pita/Documents/Rene/GAM_project/genome_architecture_entropy/')
 
 import scipy
 import numpy as np
 import pandas as pd
-import networkx as nx
 import seaborn as sns
 from matplotlib import pyplot as plt
 from tqdm.auto import tqdm
-import cmcrameri.cm as cmc
 import libpysal
 from esda.moran import Moran
 from atpbar import atpbar, register_reporter, find_reporter, flush
 import multiprocessing
 multiprocessing.set_start_method('fork', force=True)
 
-import entropy_measures as em
-import toymodel.conf_space as cs
-import toymodel.trans_probs_ as tb
+import compute_transfer_entropy as em
+import toymodel.sampling
+import transition as tb
+import plotting
 
 pd.set_option("display.precision", 2)
-
-
-def plot_te(mat1, mat2=None):
-    
-    if mat2 is not None:
-        fig, ax = plt.subplots(1, 2, figsize=(16, 8), sharex=True, sharey=True)
-        sns.set_theme(style='white')
-        plt.rcParams['figure.dpi'] = 75
-
-        plot1 = sns.heatmap(mat1,
-                    ax=ax[0],
-                    #mask=np.ma.getmask(te_mask),
-                    cmap=cmc.cork_r,
-                    robust=True,
-                    square=True,
-                    center=0,
-                    linewidths=0,
-                    cbar_kws={"shrink": .6})
-        plot1.invert_yaxis()
-
-        plot2 = sns.heatmap(mat2,
-                    ax=ax[1],
-                    #mask=np.ma.getmask(te_mask),
-                    cmap=cmc.cork_r,
-                    robust=True,
-                    square=True,
-                    center=0,
-                    linewidths=0,
-                    cbar_kws={"shrink": .6})
-        plot2.invert_yaxis()
-
-    else:
-        fig, ax = plt.subplots(1, 1, figsize=(8, 8))
-        sns.set_theme(style='white')
-        plt.rcParams['figure.dpi'] = 75
-
-        plot1 = sns.heatmap(mat1,
-                    ax=ax,
-                    #mask=np.ma.getmask(te_mask),
-                    cmap=cmc.cork_r,
-                    robust=True,
-                    square=True,
-                    center=0,
-                    linewidths=0,
-                    cbar_kws={"shrink": .82})
-        plot1.invert_yaxis()
-
-    plt.show()
 
 
 def lexographic_permutations(length, sequence):
@@ -163,8 +114,9 @@ def vn_eig_entropy(rho):
 
 # %%
 '''Load model'''
+path_model = '/data/toymodels/model4/'
 model = 'toymodel4_2_multi500'
-series = np.load('toymodel/md_soft/out/' + model + '.npy')
+series = np.load(path_model + model + '.npy')
 
 if len(series.shape) == 3:
     n_realisations = 1
@@ -180,6 +132,7 @@ print('>> loaded', model)
 print('Realisations:', n_realisations, 
       '\nTimesteps:', n_timesteps, 
       '\nLoci:', n_loci)
+
 
 
 # %%
@@ -219,7 +172,7 @@ seg_mats = np.empty((n_states, n_slice, series.shape[1]))
 
 for state in tqdm(range(n_states)):
     coords_model = series[state].T
-    seg_mat = cs.slice(coords_model, n_slice, wdf_lb)
+    seg_mat = toymodel.sampling.slice(coords_model, n_slice, wdf_lb)
     seg_mats[state] = seg_mat
 
 print('>> Segregation matrix computed with', n_slice, 'slices and', wdf_lb, 'lower bound window detection frequency')
@@ -228,15 +181,14 @@ if n_realisations > 1:
     seg_mats = np.reshape(seg_mats, newshape=(n_timesteps, n_realisations * n_slice, n_loci), order='F') # only for grouped!
     print('>> Realisations have been grouped for', n_realisations * n_slice, 'for each timestep')
 
-
-np.save('toymodel/segmats/' + model + '_seg_mats_%d_t%d.npy' % (n_realisations * n_slice, n_timesteps), seg_mats)
+np.save(path_model + model + '_seg_mats_%d_t%d.npy' % (n_realisations * n_slice, n_timesteps), seg_mats)
 
 
 
 # %%
 '''Load segregation matrix'''
 model_seg = '_seg_mats_2000_t7.npy'
-seg_mats = np.load('toymodel/segmats/' + model + model_seg)
+seg_mats = np.load(path_model + model + model_seg)
 
 # Assert that the segregation matrix is correct
 if n_realisations > 1:
@@ -319,7 +271,7 @@ hist_len = 7
 #seg_mats_ = np.moveaxis(seg_mats_, 0, 2)
 
 tprobs = tb.bin_probs(seg_mats_, n_bin=n_loci, hist_len=hist_len)
-te_mat = em.multivariate_transfer_entropy_(tprobs)
+te_mat = em.multivariate_transfer_entropy(tprobs)
 te_mat_asym = te_mat - te_mat.T
 #te_mask = np.ma.masked_less(te_mat_asym_0, 0)
 
@@ -330,7 +282,7 @@ print('TE asymmetry =', np.sum(te_mat_asym[te_mat_asym > 0]))
 print('TE median =', np.median(te_mat))
 print('TE mean =', np.mean(te_mat))
 print('TE std =', np.std(te_mat))
-plot_te(te_mat, te_mat_asym)
+plotting.heatmaps(te_mat, te_mat_asym)
 
 
 
@@ -356,12 +308,10 @@ print('SSC TE std =', np.std(te_mat_perm))
 
 te_eff = te_mat - te_mat_perm
 print('Eff. TE = TE - TE(SSC) = ', np.sum(te_eff)) 
-plot_te(te_mat_perm, te_eff)
+plotting.heatmaps(te_mat_perm, te_eff)
 
 #te_eff = te_eff + np.abs(te_eff.min())
 #np.fill_diagonal(te_eff, 0)
-
-
 
 
 
@@ -373,6 +323,7 @@ w_queen = libpysal.weights.lat2W(n_loci, n_loci, rook=False)
 #w = libpysal.weights.Rook.from_networkx(H)
 mi = Moran(te_mat_asym, w_rook)
 print(mi.I, mi.p_sim)
+
 
 
 # %%
@@ -411,7 +362,7 @@ for i in tqdm(range(n_perm)):
 
     seg_mats_p = seg_mats[seq,:,:]
     tprobs = tb.bin_probs(seg_mats_p, n_bin=n_loci, hist_len=hist_len)
-    te = em.multivariate_transfer_entropy_(tprobs)
+    te = em.multivariate_transfer_entropy(tprobs)
 
     te_sums.append(np.sum(te))
     te_std.append(np.std(te))
@@ -498,6 +449,7 @@ df['TE sum zscore'] = (df['TE sum'] - df['TE sum'].mean()) / df['TE sum'].std(dd
 #print(majority_sequence)
 
 
+
 # %% 
 '''Plot violin plots'''
 def patch_violinplot():
@@ -566,80 +518,6 @@ for y_var1 in vars:
 
 
 # %% 
-'''Transfer entropy network'''
-te_asym = te_mat_asym.copy()
-
-#te_asym[14:,] = 0
-#te_asym[:14,] = 0
-#te_asym[:,10:] = 0
-#te_asym[:25,] = 0
-
-mean = np.mean(te_asym[te_asym > 0])
-#te_asym[te_asym < 0.85*np.max(te_asym)] = 0
-te_asym[te_asym < mean] = 0
-
-H = nx.DiGraph(te_asym)
-#coords_model = series[4].T
-pos = coords_model.T#[1:14]
-
-# transfer arrows
-edges, weights = zip(*nx.get_edge_attributes(H,'weight').items())
-vmax_w = np.nanmax(list(weights))
-vmin_w = np.nanmin(weights)
-weights_norm = (np.array(weights) - vmin_w) / (vmax_w - vmin_w)
-weights_list = list(np.nan_to_num(weights_norm, copy=False, nan=0.0))
-
-#n = 10 # n highest interactions
-#idx = np.argsort(te_asym)[:,-n:]
-#data_ = np.zeros(te_asym.shape)
-#for i in range(te_asym.shape[0]):
-#    data_[i,idx[i]] = te_asym[i,idx[i]]
-#data_ = np.nan_to_num(data_, 0)
-
-# color drive - receive, centered around 0
-drivers = np.sum(te_asym, axis=1)
-receivers = np.sum(te_asym, axis=0)
-vmax_interact = max(np.abs(drivers - receivers))
-node_color_norm = (drivers - receivers) / vmax_interact
-node_list = list(node_color_norm)
-
-# size = number of total interactions
-n_interactions = np.apply_along_axis(np.sum, 1, te_asym > 0) + np.apply_along_axis(np.sum, 0, te_asym > 0)
-
-plt.rcParams["figure.figsize"] = (7,7)
-plt.rcParams['figure.dpi'] = 70
-plt.plot(coords_model[0], coords_model[1], '-k') 
-nodes = nx.draw_networkx_nodes(H, 
-                                pos=pos, 
-                                node_size=600,
-                                #node_size=35*n_interactions,
-                                node_color=node_list, 
-                                cmap=cmc.cork_r,
-                                vmax=1.4,
-                                vmin=-1.4)
-
-edges = nx.draw_networkx_edges(H,
-                                pos=pos,
-                                node_size=600,
-                                #node_size=40*n_interactions,
-                                edge_color=weights_list, 
-                                width=1.8, 
-                                edge_cmap=plt.cm.BuPu,
-                                arrowstyle="->",
-                                arrowsize=20,
-                                min_source_margin=15,
-                                min_target_margin=10,
-                                connectionstyle='arc3,rad=0.2')
-M = H.number_of_edges()
-for i in range(M):
-    edges[i].set_alpha(weights_list[i])
-
-nx.draw_networkx_labels(H, pos=pos)
-plt.show()
-
-
-
-# %% 
 '''Significance testing'''
 # test paramater
 reps = 300
@@ -658,7 +536,7 @@ bool_arr = np.zeros_like(ran_test_te)
 for rep in tqdm(range(0, reps, cores)):
     #sequence = np.random.RandomState().permutation(sequence)
     with multiprocessing.Pool(cores, register_reporter, [reporter]) as pool:
-        workload = [(seg_mats, nbin, True, history_l)] 
+        workload = [(seg_mats, nbin, history_l)] 
         workloads = []
         for job in range(cores):
             workloads.extend(workload)
@@ -669,7 +547,7 @@ for rep in tqdm(range(0, reps, cores)):
         workloads = []
         for job in range(cores):
             workloads.append(res_probs[job])
-        res_te = pool.map(em.all_transfer_entropy, workloads)
+        res_te = pool.map(em.multivariate_transfer_entropy, workloads)
         flush()
 
     #for job, array in enumerate(res_probs):
