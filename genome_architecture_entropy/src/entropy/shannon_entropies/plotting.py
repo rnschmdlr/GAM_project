@@ -111,3 +111,99 @@ def lineplot(windows, methods, *args):
     return None
 #data = np.load('/Users/pita/Documents/Rene/GAM_project/genome_architecture_entropy/data/segregation_at_30kb.table_MI.npy')
 #slow_raster(data)
+
+
+def plot_ensemble(coords_model, je_mat, mi_mat, coseg_mat, title, entropy, color_points, vmax):
+    '''2x2 plot fxn'''
+    # Generate a mask for the upper triangle from value shape, k=1 to see diagonal line in heatmap
+    mask_shape = (je_mat.shape[1], je_mat.shape[1])
+    mask = np.triu(np.ones(mask_shape, dtype=bool), k=0)
+
+    # style and colors
+    sns.set_theme(style='white')
+    cmap = sns.color_palette('flare', as_cmap=True)
+    scatter_cmap = sns.color_palette('dark:dodgerblue_r', as_cmap=True)
+    sm = plt.cm.ScalarMappable(cmap=sns.color_palette('dark:dodgerblue', as_cmap=True))
+
+    # dynamic coordinate boundaries
+    xmin = np.min(coords_model[0])
+    xmax = np.max(coords_model[0])
+    ymin = np.min(coords_model[1])
+    ymax = np.max(coords_model[1])
+    height = ymax - ymin
+    width = xmax - xmin
+    
+    if max(height, width) == width:
+        ymax = 1/2 * width
+        ymin = -1/2 * width
+        f = 0.08 * width # spacing factor
+    else:
+        xmax = 1/2 * height
+        xmin = -1/2 * height
+        f = 0.08 * height
+
+    dyn_boundaries = [xmin - f, xmax + f, ymin - f, ymax + f]
+
+    #static coordinate boundaries
+    xnum = coords_model.shape[1]
+    f = 0.08 * xnum
+    ymin = -1/2 * xnum
+    ymax = 1/2 * xnum
+    boundaries = [0 - f, xnum + f, ymin - f, ymax + f]
+    #boundaries = np.mean( np.array([ dyn_boundaries, static_boundaries ]), axis=0 )
+
+    # set figure
+    fig, (ax1, ax2) = plt.subplots(2, 2)
+    fig.set_size_inches(12, 10)
+    fig.suptitle(title, fontsize=25, weight='bold')
+    
+    # set coordinate plot
+    ax1[0].plot(coords_model[0], coords_model[1], '-k') 
+    ax1[0].scatter(coords_model[0], coords_model[1], s=50, c=color_points, cmap=scatter_cmap)
+    ax1[0].axis(boundaries)
+    ax1[0].tick_params(labelleft=False, labelbottom=False)
+    ax1[0].set_title('Chromatin model colored by accumulated MI', loc='left', fontsize=16)
+    ax1[0].axis('off')
+    plt.colorbar(sm, ax=ax1[0], shrink=0.5).outline.set_visible(False)
+
+    # set 3 heatmap plots
+    ax1[1].set_title('Mutual Information (MI)', loc='left', fontsize=16)
+    ax1[1].tick_params(labelleft=False, labelbottom=False)
+    sns.heatmap(mi_mat,
+                ax=ax1[1],
+                mask=mask,
+                cmap=cmap,
+                robust=True,
+                square=True,
+                linewidths=0,
+                cbar_kws={"shrink": .5},
+                vmax=vmax[0],
+                vmin=0)
+    
+    ax2[0].set_title('Linkage disequilibirum (LD)', loc='left', fontsize=16)
+    ax2[0].tick_params(labelleft=False, labelbottom=False)
+    sns.heatmap(coseg_mat,
+                ax=ax2[0],
+                mask=mask, 
+                cmap=cmap, 
+                robust=True, 
+                square=True, 
+                linewidths=0,
+                cbar_kws={"shrink": .5},
+                vmax=vmax[1])
+    
+    ax2[1].set_title('Normalized difference (LD - MI)', loc='left', fontsize=16)
+    ax2[1].tick_params(labelleft=False, labelbottom=False)
+    sns.heatmap(je_mat,
+                ax=ax2[1],
+                mask=mask, 
+                cmap=cmap, 
+                robust=True, 
+                square=True, 
+                linewidths=0,
+                cbar_kws={"shrink": .5},
+                vmax=vmax[2],
+                vmin=0)
+
+    plt.figtext(0.4, 0.05, 'Global entropy H = '+entropy, fontsize=14)
+    plt.show()
