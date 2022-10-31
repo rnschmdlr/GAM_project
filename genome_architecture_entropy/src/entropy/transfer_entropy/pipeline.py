@@ -1,23 +1,25 @@
-# %%
-'''Import'''
+# %% '''Import and helper function definitons'''
 import os
-os.chdir('/Users/pita/Documents/Rene/GAM_project/genome_architecture_entropy/src/')
+#os.chdir('/Users/pita/Documents/Rene/GAM_project/genome_architecture_entropy/src/')
+os.chdir('/fast/AG_Metzger/rene/GAM_project/genome_architecture_entropy/src/')
 
+import time
 import scipy
 import numpy as np
 import pandas as pd; pd.set_option("display.precision", 2)
 import seaborn as sns
 from matplotlib import pyplot as plt
 from tqdm.auto import tqdm
-import libpysal
-from esda.moran import Moran
+#import libpysal
+#from esda.moran import Moran
 from atpbar import atpbar, register_reporter, find_reporter, flush
+from mantichora import mantichora
 import multiprocessing ;multiprocessing.set_start_method('fork', force=True)
 
-import compute_transfer_entropy as em
+import entropy.transfer_entropy.compute_transfer_entropy as em
 import toymodel.sampling
-import transition as tb
-import plotting
+import entropy.transfer_entropy.transition as tb
+import entropy.transfer_entropy.plotting as plotting
 
 
 def lexographic_permutations(length, sequence):
@@ -109,8 +111,7 @@ def vn_eig_entropy(rho):
     return(S)
 
 
-# %%
-'''Load model'''
+# %% '''Load model'''
 path_model = '../data/toymodels/model4/'
 model = 'toymodel4_2_multi500'
 series = np.load(path_model + model + '.npy')
@@ -132,8 +133,7 @@ print('Realisations:', n_realisations,
 
 
 
-# %%
-'''Quick coordinate viewer'''
+# %% '''Quick coordinate viewer'''
 plt.rcParams["figure.figsize"] = (6,3)
 plt.rcParams['figure.dpi'] = 80
 
@@ -145,8 +145,7 @@ for realisation in range(5):
 
 
 
-# %%
-'''Transform model'''
+# %% '''Transform model'''
 if n_realisations > 1:
     # order='C' individual: 0..11 * 5
     # order='F') grouped 5*0, 5*1, 5*2, ..
@@ -160,8 +159,7 @@ print('>> removed', n_cut, 'timesteps for a total of', n_timesteps)
 
 
 
-# %%
-'''Compute segregation matrix'''
+# %% '''Compute segregation matrix'''
 n_states = n_realisations * n_timesteps
 n_slice = 4
 wdf_lb = 0.1
@@ -182,8 +180,7 @@ np.save(path_model + model + '_seg_mats_%d_t%d.npy' % (n_realisations * n_slice,
 
 
 
-# %%
-'''Load segregation matrix'''
+# %% '''Load segregation matrix'''
 model_seg = '_seg_mats_2000_t7.npy'
 seg_mats = np.load(path_model + model + model_seg)
 
@@ -215,8 +212,7 @@ coords_model = series[-1].T
 
 
 
-# %%
-'''Window detection statistics'''
+# %% '''Window detection statistics'''
 n_slice_ = n_realisations * n_slice
 detect_sum = [2,3,4,5,6,7,8,9,10]
 n_detect = np.zeros(shape=(n_timesteps, len(detect_sum)))
@@ -250,9 +246,8 @@ df_
 
 
 
-# %%
-'''Transfer Entropy calculation and plotting'''
-seq = [3,2,1,0,6,5,4]
+# %% '''Transfer Entropy calculation and plotting'''
+
 seg_mats_ = seg_mats#[np.array(seq),:,:]; print('Sequence = ', seq)
 hist_len = 7
 
@@ -283,8 +278,7 @@ plotting.heatmaps(te_mat, te_mat_asym)
 
 
 
-# %%
-'''Effective TE'''
+# %% '''Effective TE'''
 hist_len = 7
 temp = np.empty(shape=(100, n_loci, n_loci))
 # calculating the small samplre contribution
@@ -312,22 +306,19 @@ plotting.heatmaps(te_mat_perm, te_eff)
 
 
 
-# %%
-'''Moran's I'''
+# %% '''Moran's I'''
 #H = nx.DiGraph(te_mat_asym)
-w_rook = libpysal.weights.lat2W(n_loci, n_loci, rook=True)
-w_queen = libpysal.weights.lat2W(n_loci, n_loci, rook=False)
-#w = libpysal.weights.Rook.from_networkx(H)
-mi = Moran(te_mat_asym, w_rook)
-print(mi.I, mi.p_sim)
+#w_rook = libpysal.weights.lat2W(n_loci, n_loci, rook=True)
+#w_queen = libpysal.weights.lat2W(n_loci, n_loci, rook=False)
+##w = libpysal.weights.Rook.from_networkx(H)
+#mi = Moran(te_mat_asym, w_rook)
+#print(mi.I, mi.p_sim)
 
 
 
-# %%
-'''Time permuation'''
-n_perm = 720
+# %% '''Time permuation'''
+n_perm = 5040
 hist_len = 7
-te_mat = np.empty(shape=(n_perm, n_loci, n_loci))
 sequences = []
 te_sums = []
 te_asym_sums = []
@@ -393,11 +384,83 @@ d = {'Permutation': sequences,
 df_perm = pd.DataFrame(d)
 #df = df.round(pd.Series(6, df.drop('Permutation', axis=1).columns))
 df_perm = df_perm.sort_values('Kendalls tau-b (perm.)', key=abs)
+np.save('/fast/AG_Metzger/rene/GAM_project/genome_architecture_entropy/data/results/model4_2_4x500_df_perm_5040.npy', df_perm)
+
+name_df = 'df_perm_%d.csv' % n_perm
+df_perm.to_csv(path_model + model + model_seg + name_df)
+
+
+# %% Parallel process time order permutations
+n_perm = 5040
+n_cores = 16
+hist_len = 7
+lexperms = lexographic_permutations(n_perm, np.arange(n_timesteps))
+
+def task(name, perms):
+    te_net = []
+    permutations = []
+    te_sums = []
+    te_asym_sums = []
+    kendall_corr = []
+    te_std = []
+    te_mean = []
+    te_median = []
+
+    for i in atpbar(range(len(perms)), name=name):
+        seq = perms[i]
+        permutations.append(seq)
+        kendall_corr.append(round(scipy.stats.kendalltau(np.arange(n_timesteps), seq)[0], 3))
+
+        seg_mats_p = seg_mats[seq,:,:]
+        tprobs = tb.bin_probs(seg_mats_p, n_bin=n_loci, hist_len=hist_len)
+        te = em.multivariate_transfer_entropy(tprobs)
+
+        te_sums.append(np.sum(te))
+        te_std.append(np.std(te))
+        te_mean.append(np.mean(te))
+        te_median.append(np.median(te))
+        te_net.append(np.sum(np.triu(te) - np.tril(te)))
+
+        te_asym = te - te.T
+        te_asym_sums.append(te_asym[te_asym > 0].sum())
+
+    d = {'Permutation': permutations,
+         'Kendalls tau-b (perm.)': kendall_corr,
+         'TE direction': te_net,
+         'TE median': te_median,
+         'TE mean': te_mean,
+         'TE std': te_std,
+         'TE sum': te_sums,
+         'Asym TE sum': te_asym_sums,}
+
+    return (d)
+
+
+with mantichora(nworkers=n_cores) as mcore:
+    start = time.time()
+    for i in range(n_cores):
+        mcore.run(task, 'task %d' % i, lexperms[int(n_perm / n_cores) * i: int(n_perm / n_cores) * (i+1)])
+    returns = mcore.returns()
+end = time.time()
+print('Execution time: %d seconds' % (end - start))
+
+
+# join dictionaries from list of dictionaries
+d = {}
+for t in range(n_cores):
+    for key, value in returns[t].items():
+        d.setdefault(key, []).extend(value)
+
+df_perm = pd.DataFrame(d)
+df_perm = df_perm.sort_values('Kendalls tau-b (perm.)', key=abs)
+
+name_df = 'df_perm_%d.csv' % n_perm
+df_perm.to_csv(path_model + model + model_seg + name_df)
+#df = df.round(pd.Series(6, df.drop('Permutation', axis=1).columns))
 
 
 
-# %%
-'''Correlate all columns (Pearson's r)'''
+# %% '''Correlate all columns (Pearson's r)'''
 val = []
 var1 = []
 var2 = []
@@ -429,9 +492,9 @@ labels=["strong negative", "weak negative", "none", "weak positive", "strong pos
 # group observations by by Kendall corr. into fixed bins
 df["Kendall correlation vs ordered sequence"] = pd.cut(df['Kendalls tau-b (perm.)'],[-1, -0.75, -0.5, 0.5, 0.75, 1], #[0.7, 0.75, 0.8, 0.85, 0.95, 1,], #
 #labels=['0.70 - 0.75', '0.75 - 0.80', '0.80 - 0.85', '0.85 - 0.95', '0.95 - 1.00'])
-labels=["strong negative", "weak negative", "very weak", "weak positive", "strong positive"],)
+labels=["-1 to -0.75", "-0.75 to -0.5", "-0.5 to 0.5", "0.5 to 0.75", "0.75 to 1"],)
 
-df["99th percentile"] = df['Kendalls tau-b (perm.)'] > df['Kendalls tau-b (perm.)'].quantile(0.99)
+df["99th percentile"] = df['Kendalls tau-b (perm.)'] > df['Kendalls tau-b (perm.)'].quantile(0.995)
 df['TE sum zscore'] = (df['TE sum'] - df['TE sum'].mean()) / df['TE sum'].std(ddof=0)
 
 #filtered_df = df[(df['TE std'] < df['TE std'].quantile(0.2)) & 
@@ -447,14 +510,13 @@ df['TE sum zscore'] = (df['TE sum'] - df['TE sum'].mean()) / df['TE sum'].std(dd
 
 
 
-# %% 
-'''Plot violin plots'''
+# %% '''Plot violin plots'''
 def patch_violinplot():
     from matplotlib.collections import PolyCollection
     ax = plt.gca()
     violins = [art for art in ax.get_children() if isinstance(art, PolyCollection)]
     for i in range(len(violins)):
-        violins[i].set_linewidth(0)
+        violins[i].set_linewidth(1.5)
 
 plt.rcParams["figure.figsize"] = (12,6)
 plt.rcParams['figure.dpi'] = 75
@@ -476,8 +538,7 @@ for y_var in vars:
 
 
 
-# %%
-'''Plot scatter plots'''
+# %% '''Plot scatter plots'''
 plt.rcParams["figure.figsize"] = (12,12)
 plt.rcParams['figure.dpi'] = 100
 sns.set_context("notebook", font_scale=1.3, rc={"lines.linewidth": 2.5})
@@ -512,30 +573,65 @@ for y_var1 in vars:
 
         plt.show()
 
+# %% '''Bivariate KDE plots'''
+plt.rcParams["figure.figsize"] = (12,12)
+plt.rcParams['figure.dpi'] = 100
+sns.set_context("notebook", font_scale=1.3, rc={"lines.linewidth": 2.5})
+sns.set_style('dark')
 
+alpha = 0.6
+treshold = 0.2
+levels = 20
 
-# %% 
-'''Significance testing'''
+for y_var1 in vars:
+    pos = vars.index(y_var1)
+    for y_var2 in vars[:pos]:
+        g = sns.kdeplot(data=df[df['Kendall correlation vs ordered sequence'].isin(['-0.5 to 0.5'])], x=y_var1, y=y_var2, color="#D3D3D3", fill=True, thresh=treshold, levels=levels, cbar=False, cbar_kws={"orientation": "horizontal", "shrink": .5, "label": "Count"})
+        g = sns.kdeplot(data=df[df['Kendall correlation vs ordered sequence'].isin(['-0.75 to -0.5'])], x=y_var1, y=y_var2, color="#EE8051", antialiased=True, alpha=alpha, fill=True, thresh=treshold, levels=levels, cbar=False, cbar_kws={"orientation": "horizontal", "shrink": .5, "label": "Count"})
+        g = sns.kdeplot(data=df[df['Kendall correlation vs ordered sequence'].isin(['-1 to -0.75'])], x=y_var1, y=y_var2, color="#FFBC3F", antialiased=True, alpha=alpha, fill=True, thresh=treshold, levels=levels, cbar=False, cbar_kws={"orientation": "horizontal", "shrink": .5, "label": "Count"})
+        g = sns.kdeplot(data=df[df['Kendall correlation vs ordered sequence'].isin(['0.5 to 0.75'])], x=y_var1, y=y_var2, color="#A266EC", antialiased=True, alpha=alpha, fill=True, thresh=treshold, levels=levels, cbar=False, cbar_kws={"orientation": "horizontal", "shrink": .5, "label": "Count"})
+        g = sns.kdeplot(data=df[df['Kendall correlation vs ordered sequence'].isin(['0.75 to 1'])], x=y_var1, y=y_var2, color="#5F95F7", antialiased=True, alpha=alpha, fill=True, thresh=treshold, levels=levels, cbar=False, cbar_kws={"orientation": "horizontal", "shrink": .5, "label": "Count"})
+        g.scatter(x=df[df["99th percentile"]][y_var1], y=df[df["99th percentile"]][y_var2], alpha=0.8, s=30, linewidth=0.5, color='white', edgecolor="#5F95F7", zorder=10)
+        #g.legend(title='Seq. Kendall Correlation', loc='lower left', bbox_to_anchor=(1, 1), ncol=1, frameon=True)
+
+        # extend xlim and ylim
+        xlim = g.get_xlim()
+        xrange = xlim[1] - xlim[0]
+        ylim = g.get_ylim()
+        yrange = ylim[1] - ylim[0]
+        g.set_xlim(xlim[0] + extend*xrange, xlim[1] - extend*xrange)
+        g.set_ylim(ylim[0] + extend*yrange, ylim[1] - extend*yrange)
+
+        for line in g.get_lines():
+            line.set_alpha(0)
+
+        plt.show()
+
+# %% '''Significance testing'''
 # test paramater
-reps = 300
+reps = 40
 cores = 4
 
 # te parameter
-nbin = 36
-history_l = 1
+nbin = n_loci
+history_l = n_timesteps
 
 reporter = find_reporter()
 ran_test_te = np.zeros(shape=(reps, te_mat.shape[0], te_mat.shape[1]))
 ran_test_te_asym = np.zeros(shape=(reps, te_mat.shape[0], te_mat.shape[1]))
 bool_arr = np.zeros_like(ran_test_te)
 
-#for rep in atpbar(range(0, reps, cores), name = multiprocessing.current_process().name):
-for rep in tqdm(range(0, reps, cores)):
+for rep in atpbar(range(0, reps, cores), name = multiprocessing.current_process().name):
+#for rep in tqdm(range(0, reps, cores)):
     #sequence = np.random.RandomState().permutation(sequence)
+    
     with multiprocessing.Pool(cores, register_reporter, [reporter]) as pool:
-        workload = [(seg_mats, nbin, history_l)] 
         workloads = []
         for job in range(cores):
+            seg_mats_ = np.moveaxis(seg_mats, 2, 0)
+            seg_mats_p = np.random.RandomState().permutation(seg_mats_)
+            seg_mats_p = np.moveaxis(seg_mats_p, 0, 2)
+            workload = [(seg_mats_p, nbin, history_l)] 
             workloads.extend(workload)
         res_probs = pool.starmap(tb.bin_probs, workloads)
         flush()
@@ -559,13 +655,7 @@ for sample in range(reps):
     bool_arr[sample] = np.greater_equal(np.abs(ran_test_te[sample]), np.abs(te_mat))
 
 props = bool_arr.sum(axis=0) / reps
-sns.heatmap(props - np.diag(np.diag(props)),
-            cmap=sns.color_palette("Blues", as_cmap=True),
-            robust=True,
-            square=True,
-            linewidths=0,
-            cbar_kws={"shrink": .82})
-plt.show()
+plotting.heatmaps(props - np.diag(np.diag(props)))
 
 mean = np.mean(np.triu(props, k=1))
 median = np.median(props)
@@ -576,20 +666,8 @@ print('max proportion =', np.max(np.triu(props, k=1)))
 
 mask = props < 0.05
 
-sns.heatmap(te_mat - np.diag(np.diag(te_mat)),
-            mask=np.invert(mask),
-            cmap=sns.color_palette("Blues", as_cmap=True),
-            robust=True,
-            square=True,
-            linewidths=0,
-            cbar_kws={"shrink": .82})
-plt.show()
-
 te_asym = np.subtract(te_mat, te_mat.T, where=mask, out=np.zeros_like(te_mat))
-sns.heatmap(te_asym,
-            cmap=sns.color_palette("vlag", as_cmap=True),
-            robust=True,
-            square=True,
-            linewidths=0,
-            cbar_kws={"shrink": .82})
-plt.show()
+plotting.heatmaps(te_mat, te_asym)
+
+
+
