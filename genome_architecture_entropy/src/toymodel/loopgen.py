@@ -8,15 +8,17 @@ from Bio.PDB import PDBIO
 from Bio.PDB import Selection
 from Bio.PDB.PDBParser import PDBParser
 
-os.chdir('/Users/pita/Documents/Rene/GAM_project/genome_architecture_entropy/data/')
-import chaingen as gen
+#os.chdir('/Users/pita/Documents/Rene/GAM_project/genome_architecture_entropy/data/')
+os.chdir('/fast/AG_Metzger/rene/GAM_project/genome_architecture_entropy/src/')
+from toymodel import chaingen as gen
 
 path_cwd        = Path.cwd()
-path_restraints = str(path_cwd / 'md_soft/restraints/')
-path_out        = str(path_cwd / 'md_soft/')
-path_config     = str(path_cwd / 'md_soft/config.ini')
-path_ini_struct = str(path_cwd / 'md_soft/initial_structure.pdb')
-path_run_mdsoft = str(path_cwd.parents[0] / '/ext/md_soft/run.py')
+path_project    = path_cwd.parents[0]
+path_restraints = str(path_project / 'data/md_soft/restraints/')
+path_out        = str(path_project / 'data/md_soft/')
+path_config     = str(path_project / 'data/md_soft/config.ini')
+path_ini_struct = str(path_project / 'data/md_soft/initial_structure.pdb')
+path_run_mdsoft = str(path_project / '/ext/md_soft/run.py')
 
 
 
@@ -43,7 +45,7 @@ def write_tads_to_file(tads, num):
             boundary.insert(2, ' :')
             #tad.append(' >>')
             print(*boundary, sep='', end='\n', file=f)
-            #print(*boundary, sep='')
+            print(*boundary, sep='')
 
     return None
 
@@ -60,12 +62,23 @@ def generate_boundary_sequence(tads, steps, lbound, rbound):
 
     #outer loop: simultaneous restraint changes; inner loop: individual, boundary conditions
     for iteration in steps:
+        # remove [0,0] from tads
+        tads = tads[tads[:,0] != 0]
         write_tads_to_file(tads, iterations)
         iterations += 1
 
-        for tad in iteration:
+        for tad, val in enumerate(iteration):
             # no new restraint
-            if tad == None:
+            if val == None:
+                continue
+            
+            # remove restraint
+            if val == -1:
+                tads[tad] = [0, 0]
+                flag[tad] = 1
+            
+            # stop if restraint is already removed
+            if tads[tad].all() == 0:
                 continue
 
             left_space = False
@@ -181,6 +194,9 @@ def run_sim(series_len, chain_len, pdb_init):
         # run md_soft with args: python run.py -c config.ini
         subprocess.run(cmd, shell=True)
 
+        # execute subprocess.run with cmd and non verbose
+        #subprocess.run(cmd, shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
         # this adds the initial structure as T=0 to the coordinate array first
         #if state == 0:
         #    pdb = pd.read_fwf(pdb_init, names=names, colspecs=colspecs, usecols=lambda x: x  in cols).dropna()
@@ -193,33 +209,39 @@ def run_sim(series_len, chain_len, pdb_init):
 
 
 if __name__ == '__main__': 
+    # toymodel6:
+    chain_len = 20
+    tad_seeds = np.array([4, 11])
+    steps = [[0,1],[0,1],[-1,1],[1],[1],[1],[1]]
+
     # toymodel4_2: 1 longer loop with a unique realisation per slice
-    chain_len = 31
-    tad_seeds = np.array([15])
-    steps = [[0] for i in range(15)]
+    #chain_len = 31
+    #tad_seeds = np.array([15])
+    #steps = [[0] for i in range(15)]
+
     # toymodel5: 2 loops with variable number of realisations per time step
     #chain_len = 31
     #tad_seeds = np.array([8, 23])
     #steps = [[0],[0,1],[0],[0,1],[0],[0,1],[None],[1],[None],[1],[None],[1],[None]]
-    realisations = 500
-    series = np.zeros(shape=(realisations, len(steps)+1, chain_len, 2))
 
+    realisations = 1
+    series = np.zeros(shape=(realisations, len(steps)+1, chain_len, 2))
     for itr in range(realisations):
         # initialise coordinates to pdb input file 
         coords = gen.self_avoiding_random_walk(chain_len)
-        file_name = 'md_soft/initial_structure%d.pdb' % (itr)
-        pdbfile = str(path_cwd / file_name)
+        file_name = '/initial_structure%d.pdb' % (itr)
+        pdbfile = str(path_out + file_name)
         gen.save_points_as_pdb(coords, pdbfile)
 
         # start model generation
         tads_initial = init_tads(tad_seeds)
-        timesteps = generate_boundary_sequence(tads_initial, steps, lbound=1, rbound=31)
+        timesteps = generate_boundary_sequence(tads_initial, steps, lbound=1, rbound=chain_len)
         series[itr] = run_sim(timesteps, chain_len, pdbfile)
 
     series_grouped = np.reshape(series, newshape=(realisations * (timesteps+1), chain_len, 2), order='F')
     series_indiv = np.reshape(series, newshape=(realisations * (timesteps+1), chain_len, 2), order='C')
-    flpath = path_out + '/toymodel4_2_multi_500.npy'
-    np.save(flpath, series)
+    model = '/toymodel6_multi_1000.npy'
+    np.save(path_out + model, series)
 
     # toymodel1
     #tad_seeds = np.array([7, 20, 31]) 
