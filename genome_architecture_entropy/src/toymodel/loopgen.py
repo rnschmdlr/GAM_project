@@ -3,13 +3,14 @@ import os
 import numpy as np
 import pandas as pd
 import subprocess
+from tqdm.auto import tqdm
 from pathlib import Path
 from Bio.PDB import PDBIO
 from Bio.PDB import Selection
 from Bio.PDB.PDBParser import PDBParser
 
-#os.chdir('/Users/pita/Documents/Rene/GAM_project/genome_architecture_entropy/data/')
-os.chdir('/fast/AG_Metzger/rene/GAM_project/genome_architecture_entropy/src/')
+os.chdir('/Users/pita/Documents/Rene/GAM_project/genome_architecture_entropy/src/')
+#os.chdir('/fast/AG_Metzger/rene/GAM_project/genome_architecture_entropy/src/')
 from toymodel import chaingen as gen
 
 path_cwd        = Path.cwd()
@@ -18,7 +19,7 @@ path_restraints = str(path_project / 'data/md_soft/restraints/')
 path_out        = str(path_project / 'data/md_soft/')
 path_config     = str(path_project / 'data/md_soft/config.ini')
 path_ini_struct = str(path_project / 'data/md_soft/initial_structure.pdb')
-path_run_mdsoft = str(path_project / '/ext/md_soft/run.py')
+path_run_mdsoft = str(path_project / 'ext/md_soft/run.py')
 
 
 
@@ -45,7 +46,7 @@ def write_tads_to_file(tads, num):
             boundary.insert(2, ' :')
             #tad.append(' >>')
             print(*boundary, sep='', end='\n', file=f)
-            print(*boundary, sep='')
+            #print(*boundary, sep='')
 
     return None
 
@@ -192,10 +193,10 @@ def run_sim(series_len, chain_len, pdb_init):
             config_file.writelines(list_of_lines)
 
         # run md_soft with args: python run.py -c config.ini
-        subprocess.run(cmd, shell=True)
+        #subprocess.run(cmd, shell=True)
 
         # execute subprocess.run with cmd and non verbose
-        #subprocess.run(cmd, shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        subprocess.run(cmd, shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
         # this adds the initial structure as T=0 to the coordinate array first
         #if state == 0:
@@ -209,10 +210,10 @@ def run_sim(series_len, chain_len, pdb_init):
 
 
 if __name__ == '__main__': 
-    # toymodel6:
-    chain_len = 20
-    tad_seeds = np.array([4, 11])
-    steps = [[0,1],[0,1],[-1,1],[1],[1],[1],[1]]
+    # toymodel6: 2 loops 
+    chain_len = 25
+    tad_seeds = np.array([7, 15])
+    steps = [[0],[0,1],[0,1],[-1,1],[1],[1],[1],[1]]
 
     # toymodel4_2: 1 longer loop with a unique realisation per slice
     #chain_len = 31
@@ -224,12 +225,12 @@ if __name__ == '__main__':
     #tad_seeds = np.array([8, 23])
     #steps = [[0],[0,1],[0],[0,1],[0],[0,1],[None],[1],[None],[1],[None],[1],[None]]
 
-    realisations = 1
+    realisations = 500
     series = np.zeros(shape=(realisations, len(steps)+1, chain_len, 2))
-    for itr in range(realisations):
+    for itr in tqdm(range(realisations)):
         # initialise coordinates to pdb input file 
         coords = gen.self_avoiding_random_walk(chain_len)
-        file_name = '/initial_structure%d.pdb' % (itr)
+        file_name = '/initial_structure.pdb'
         pdbfile = str(path_out + file_name)
         gen.save_points_as_pdb(coords, pdbfile)
 
@@ -259,17 +260,3 @@ if __name__ == '__main__':
     # toymodel3: different extrusion start times
     #tad_seeds = np.array([5, 25])
     #steps = [[0],[0],[0],[0],[0],[0],[0,1],[0,1],[0,1],[0,1],[0,1],[1],[1],[1],[1],[1],[1]]
-
-    
-# %%
-'''Quick coordinate viewer'''
-from matplotlib import pyplot as plt
-
-plt.rcParams["figure.figsize"] = (6,3)
-plt.rcParams['figure.dpi'] = 80
-
-for realisation in range(series.shape[0]):
-    for state in range(series.shape[1]):
-        plt.plot(series[realisation].T[0,:,state], series[realisation].T[1,:,state], '-k')
-    plt.show()
-    plt.clf()
