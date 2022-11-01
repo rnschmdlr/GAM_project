@@ -1,5 +1,4 @@
 import numpy as np
-from tqdm import tqdm
 
 
 def random_versor():
@@ -18,7 +17,7 @@ def dist(p1, p2):
 
 def self_avoiding_random_walk(n, step=1, bead_radius=0.5, epsilon=0.001):
     points = [np.array([0.01, 0.01, 0])]
-    for i in tqdm(range(n - 1)):
+    for i in range(n - 1):
         step_is_ok = False
         while not step_is_ok:
             potential_new_step = points[-1] + step * random_versor()
@@ -32,7 +31,7 @@ def self_avoiding_random_walk(n, step=1, bead_radius=0.5, epsilon=0.001):
     return points
 
 
-def save_points_as_pdb(points, pdb_file_name, render_connect=True, verbose=True, remarks=' '):
+def save_points_as_pdb(points, pdb_file_name, render_connect=True, verbose=False, remarks=' '):
     """Save points in PDB file format."""
     remarks_records = ''
     if remarks:
