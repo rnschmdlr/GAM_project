@@ -10,18 +10,15 @@ import matplotlib
 from tqdm.auto import tqdm
 import cmcrameri.cm as cmc
 
-#os.chdir('/Users/pita/Documents/Rene/GAM_project/genome_architecture_entropy/')
+os.chdir('/Users/pita/Documents/Rene/GAM_project/genome_architecture_entropy/src/')
 
-import shannon_entropies.compute_2d_entropies as em
-import transfer_entropy.compute_transfer_entropy as te
-import transfer_entropy.transition as tb
+import entropy.shannon_entropies.compute_2d_entropies as em
+import entropy.transfer_entropy.compute_transfer_entropy as te
+import entropy.transfer_entropy.transition as tb
 import toymodel.sampling
 
-path_model = '/data/toymodels/model2/'
-model = 'toymodel2'
-series = np.load(path_model + model + '.npy')
-path_series_out = path_model + '/series'
 
+# %%
 def plot_large_ensemble(coords_model, matrices_vmax_dict, mi_sums_vmax, state_H, *args):
     '''4x2 plot fxn'''
     # Generate a mask for the upper triangle from value shape, k=1 to see diagonal line in heatmap
@@ -145,6 +142,11 @@ np.save(path_model + 'toymodel_interpolated.npy', series_extended)
 
 # %%
 '''Series 2D Calculations'''
+path_model = '/data/toymodels/model2/'
+model = 'toymodel2'
+series = np.load(path_model + model + '.npy')
+path_series_out = path_model + '/series'
+
 n_slice = 2000
 #series_extended = np.load(path_model + 'toymodel_interpolated.npy')
 seg_mats = np.empty((series.shape[0], n_slice, series.shape[1]))
@@ -203,121 +205,5 @@ for state in tqdm(range(series.shape[0])):
     file = '/state_2_%03d.png' % (state)
 
     plot_large_ensemble(coords_model, matrices_vmax_dict, mi_sums_vmax, state_H, file)
-
-    #ffmpeg -framerate 30 -pattern_type glob -i '*.png' -pix_fmt yuv420p -b:v 4M movie.mp4")
-
-
-
-# %%
-def plot_large_ensemble(coords_model, matrices_vmax_dict, drivers, norm, state_H, *args):
-    # style and colors
-    sns.set_theme(style='dark')
-    cmap_scatter_ = cmc.cork_r(np.linspace(0.2, 0.8, 256))
-    my_cmap = matplotlib.colors.LinearSegmentedColormap.from_list('my_colormap', cmap_scatter_)
-    
-    cmap_legend_scatter = plt.cm.ScalarMappable(norm=matplotlib.colors.Normalize(-1, 1), cmap=my_cmap)
-    #cmap_legend_scatter.set_clim(vmin=-1.4, vmax=1.4)
-
-    # dynamic coordinate boundaries
-    xmin = np.min(coords_model[0])
-    xmax = np.max(coords_model[0])
-    width = xmax - xmin
-    length = coords_model.shape[1]
-    scaling = length / width # for scatter point size
-
-    # set subtitle text
-    text_info = ''
-    for i in state_H:
-        text_info = text_info + i + str(state_H[i])
-
-    # set figure
-    fig = plt.figure(figsize=(10.5, 3))
-    plt.figtext(x=0, y=0.95, s=text_info, fontsize=16, weight='bold', )
-    gs = gridspec.GridSpec(2, 6, width_ratios=[.07,1,1,1,1,1])
-    ax1 = plt.subplot(gs[0:2, 1:4])
-    ax2 = plt.subplot(gs[0:2, 4:6])
-    ax3 = plt.subplot(gs[0:2, 0:1]) # colorbar scatter
-    axes = [ax1, ax2, ax3]
-    
-    # set coordinate plot
-    axes[0].plot(coords_model[0], coords_model[1], '-k', zorder=1) 
-    axes[0].scatter(coords_model[0], coords_model[1], s=50*1.5*scaling, c=drivers, cmap=my_cmap, norm=norm, zorder=2)#, vmax=0.53)
-    axes[0].set_aspect('equal', 'datalim')
-    axes[0].tick_params(labelleft=False, labelbottom=False)
-    #axes[0].set_title('Driving loci in chromatin model (net positive transfer entropy)', loc='center', fontsize=14, y=1.1)
-    axes[0].axis('off')
-    plt.colorbar(cmap_legend_scatter, cax=axes[2], shrink=0.3).outline.set_visible(False)
-    axes[2].yaxis.tick_left()
-    axes[2].set_ylabel('net transfered entropy %', labelpad=-55)
-
-    # set the heatmap plots
-    for index, (key, value) in enumerate(matrices_vmax_dict.items()):
-        axes[index+1].set_title(key, loc='left', fontsize=14)
-        axes[index+1].tick_params(labelleft=False, labelbottom=False)
-
-        plot = sns.heatmap(value[0],
-                    ax=axes[index+1],
-                    mask=None,
-                    cmap=cmc.devon_r,
-                    square=True,
-                    linewidths=0,
-                    vmax=value[1],
-                    vmin=0)
-        plot.invert_yaxis()
-
-    plt.tight_layout()
-    plt.savefig(path_series_out + args[0], dpi=150)
-    plt.close(fig)
-    #plt.show()
-
-
-'''Transfer Entropy Calculations'''
-seg_file = '_seg_mats_2000_t7.npy'
-seg_mats = np.load(path_model + model + seg_file)
-
-te_vmax = 0
-te_loci_vmax = 0
-te_loci_vmin = 0
-
-# precompute max value for scaling
-length = seg_mats.shape[0]
-sequence = np.linspace(0, length-1, length)
-probs = tb.bin_probs(seg_mats, sequence, nbin=36, hist_len = 1)
-te_mat = em.all_transfer_entropy(probs)
-te_vmax = min(te_mat.min(), te_vmax)
-
-te_mat_asym = te_mat - te_mat.T
-median = np.median(te_mat_asym[te_mat_asym > 0])
-te_mat_asym[te_mat_asym < median] = 0
-drivers = np.sum(te_mat_asym, axis=1)
-receivers = np.sum(te_mat_asym, axis=0)
-vmax_interact = max(drivers - receivers)
-vmin_interact = min(drivers - receivers)
-te_loci_vmax = max(vmax_interact.max(), te_loci_vmax)
-te_loci_vmin = min(vmin_interact.min(), te_loci_vmin)
-norm = matplotlib.colors.Normalize(vmin=te_loci_vmin, vmax=te_loci_vmax)
-
-# compute all information measures:
-for state in tqdm(range(1, length)):
-    coords_model = series[state].T
-    seg_mat = seg_mats[:state] 
-    sequence = np.linspace(0, state-1, state)
-    probs = tb.bin_probs(seg_mat, sequence, nbin=36)
-    te_mat = em.all_transfer_entropy(probs)
-
-    te_mat_asym = te_mat - te_mat.T
-    median = np.median(te_mat_asym[te_mat_asym > 0])
-    te_mat_asym[te_mat_asym < median] = 0
-
-    drivers = np.sum(te_mat_asym, axis=1)
-    receivers = np.sum(te_mat_asym, axis=0)
-    node_colors = drivers - receivers
-
-    # prepare plot function call
-    matrices_vmax_dict = {'Multivar. Transfer Entropy': [-1 * te_mat, -1 * te_vmax]}
-    state_H = {'Timestep ': state}
-    file = '/te_series_3_%03d.png' % (state)
-
-    plot_large_ensemble(coords_model, matrices_vmax_dict, node_colors, norm, state_H, file)
 
     #ffmpeg -framerate 30 -pattern_type glob -i '*.png' -pix_fmt yuv420p -b:v 4M movie.mp4")
