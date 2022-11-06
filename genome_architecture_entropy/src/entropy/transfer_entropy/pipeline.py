@@ -1,7 +1,7 @@
 # %% '''Import and helper function definitons'''
 import os
-#os.chdir('/Users/pita/Documents/Rene/GAM_project/genome_architecture_entropy/src/')
-os.chdir('/fast/AG_Metzger/rene/GAM_project/genome_architecture_entropy/src/')
+os.chdir('/Users/pita/Documents/Rene/GAM_project/genome_architecture_entropy/src/')
+#os.chdir('/fast/AG_Metzger/rene/GAM_project/genome_architecture_entropy/src/')
 
 import time
 import scipy
@@ -9,6 +9,7 @@ import numpy as np
 import pandas as pd; pd.set_option("display.precision", 2)
 import seaborn as sns
 from matplotlib import pyplot as plt
+import matplotlib.colors as mcolors
 from tqdm.auto import tqdm
 #import libpysal
 #from esda.moran import Moran
@@ -112,8 +113,8 @@ def vn_eig_entropy(rho):
 
 
 # %% '''Load model'''
-path_model = '../data/toymodels/model4/'
-model = 'toymodel4_2_multi500'
+path_model = '../data/toymodels/model1/'
+model = 'toymodel1'
 series = np.load(path_model + model + '.npy')
 
 if len(series.shape) == 3:
@@ -137,8 +138,8 @@ print('Realisations:', n_realisations,
 plt.rcParams["figure.figsize"] = (6,3)
 plt.rcParams['figure.dpi'] = 80
 
-for realisation in range(5):
-    for state in range(series.shape[1]):
+for realisation in range(n_realisations):
+    for state in range(n_timesteps):
         plt.plot(series[realisation].T[0,:,state], series[realisation].T[1,:,state], '-k')
     plt.show()
     plt.clf()
@@ -152,8 +153,8 @@ if n_realisations > 1:
     series = np.reshape(series, newshape=(n_realisations * n_timesteps, n_loci, 2), order='F') 
     print('>> transformed model')
 
-n_cut = 4
-series = series[n_realisations * n_cut:]# -n_realisations * n_cut]
+n_cut = 1
+series_ = series[n_realisations * n_cut:]# -n_realisations * n_cut]
 n_timesteps -= (n_cut)
 print('>> removed', n_cut, 'timesteps for a total of', n_timesteps)
 
@@ -161,28 +162,29 @@ print('>> removed', n_cut, 'timesteps for a total of', n_timesteps)
 
 # %% '''Compute segregation matrix'''
 n_states = n_realisations * n_timesteps
-n_slice = 4
-wdf_lb = 0.1
-seg_mats = np.empty((n_states, n_slice, series.shape[1]))
+n_slice = 1000
+wdf_lb_ub = [0.15, 0.4]
+seg_mats = np.empty((n_states, n_slice, series_.shape[1]))
 
 for state in tqdm(range(n_states)):
-    coords_model = series[state].T
-    seg_mat = toymodel.sampling.slice(coords_model, n_slice, wdf_lb)
+    coords_model = series_[state].T
+    seg_mat = toymodel.sampling.slice(coords_model, n_slice, wdf_lb_ub)
     seg_mats[state] = seg_mat
 
-print('>> Segregation matrix computed with', n_slice, 'slices and', wdf_lb, 'lower bound window detection frequency')
+print('>> Segregation matrix computed with', n_slice, 'slices,', wdf_lb_ub[0], 'lower bound and', wdf_lb_ub[1], 'upper bound window detection frequency')
 
 if n_realisations > 1:
     seg_mats = np.reshape(seg_mats, newshape=(n_timesteps, n_realisations * n_slice, n_loci), order='F') # only for grouped!
     print('>> Realisations have been grouped for', n_realisations * n_slice, 'for each timestep')
 
-np.save(path_model + model + '_seg_mats_%d_t%d.npy' % (n_realisations * n_slice, n_timesteps), seg_mats)
+model_seg = '_seg_mats_%d_t%d' % (n_realisations * n_slice, n_timesteps)
+np.save(path_model + model + model_seg + '.npy', seg_mats)
 
 
 
 # %% '''Load segregation matrix'''
-model_seg = '_seg_mats_2000_t7.npy'
-seg_mats = np.load(path_model + model + model_seg)
+model_seg = '_seg_mats_1000_t%d' % (n_timesteps)
+seg_mats = np.load(path_model + model + model_seg + '.npy')
 
 # Assert that the segregation matrix is correct
 if n_realisations > 1:
@@ -200,7 +202,7 @@ cut_diff = n_timesteps - seg_mats.shape[0]
 if int(cut_diff) != 0: print('>> series n_cut is not matching segregation matrix n_cut. Difference:', cut_diff)
 # match n_cut of segmats to n_cut of series if necessary
 if cut_diff > 0:
-    series = series[:-cut_diff]
+    series_ = series_[:-cut_diff]
     n_timesteps -= cut_diff
     print('>> removed', np.abs(cut_diff), 'timesteps from series')
 elif cut_diff < 0:
@@ -208,11 +210,12 @@ elif cut_diff < 0:
     print('>> removed', np.abs(cut_diff), 'timesteps from segregation matrix')
 
 # set coords_model to the last timestep
-coords_model = series[-1].T
+coords_model = series_[-1].T
 
 
 
 # %% '''Window detection statistics'''
+# Window detection statistics
 n_slice_ = n_realisations * n_slice
 detect_sum = [2,3,4,5,6,7,8,9,10]
 n_detect = np.zeros(shape=(n_timesteps, len(detect_sum)))
@@ -242,14 +245,17 @@ idx = np.arange(n_timesteps+n_cut)[n_cut:].tolist()
 df = pd.DataFrame(d, index=idx)
 df2 = pd.DataFrame(n_detect, columns=detect_sum, index=idx)
 df_ = pd.concat([df, df2], axis=1)
+
+file = path_model + model + model_seg + '_wdf_stats.csv'
+df_.to_csv(file, sep=';')
 df_
 
 
 
 # %% '''Transfer Entropy calculation and plotting'''
-
+# Transfer Entropy calculation and plotting
 seg_mats_ = seg_mats#[np.array(seq),:,:]; print('Sequence = ', seq)
-hist_len = 7
+hist_len = n_timesteps
 
 # backwards time order
 #seg_mats_ = np.flip(seg_mats_)
@@ -274,7 +280,60 @@ print('TE asymmetry =', np.sum(te_mat_asym[te_mat_asym > 0]))
 print('TE median =', np.median(te_mat))
 print('TE mean =', np.mean(te_mat))
 print('TE std =', np.std(te_mat))
-plotting.heatmaps(te_mat, te_mat_asym)
+
+file_heatmap = path_model + model + model_seg + '_te_hist%d.png' % (hist_len)
+plotting.heatmaps(te_mat, te_mat_asym, file_heatmap)
+
+
+
+# %% '''Progression'''
+# Calculate progression
+# precompute max value for scaling
+probs = tb.bin_probs(seg_mats, n_bin=n_loci, hist_len=n_timesteps)
+te_mat = em.multivariate_transfer_entropy(probs)
+
+te_mat_asym = te_mat - te_mat.T
+mean = np.mean(te_mat_asym[te_mat_asym > 0])
+te_mat_asym[te_mat_asym < mean] = 0
+te_vmax = np.max(te_mat_asym)
+
+drivers = np.sum(te_mat_asym, axis=1)
+receivers = np.sum(te_mat_asym, axis=0)
+vmax_interact = max(np.abs(drivers - receivers))
+norm = mcolors.Normalize(-1,1)
+
+# compute all information measures:
+for state in range(1, n_timesteps):
+    coords_model = series.T[:,:,state]
+    seg_mat = seg_mats[:state+1] 
+    probs = tb.bin_probs(seg_mat, n_bin=n_loci, hist_len=n_timesteps)
+    te_mat = em.multivariate_transfer_entropy(probs)
+
+    te_mat_asym = te_mat - te_mat.T
+    te_mat_asym_ = te_mat_asym.copy()
+    mean = np.mean(te_mat_asym[te_mat_asym > 0])
+    te_mat_asym[te_mat_asym < mean] = 0
+
+    drivers = np.sum(te_mat_asym, axis=1)
+    receivers = np.sum(te_mat_asym, axis=0)
+    node_colors = (drivers - receivers) / vmax_interact
+
+    # prepare plot function call
+    matrices_vmax_dict = {'Asymmetric Transfer Entropy': [te_mat_asym_, te_vmax]}
+    state_t = {'t = ': state}
+    file = path_model + model + model_seg + '_progression_%03d.png' % (state)
+
+    plotting.progression(coords_model, matrices_vmax_dict, node_colors, norm, state_t, file)
+
+
+# %% '''Plot network'''
+# calculate figure size for networkx plot by using the format scaling, maximum size is 16
+scaling = 2.2
+figsize = (8*scaling, 8)
+file_network = path_model + model + model_seg + '_te_network_hist%d.png' % (hist_len)
+plotting.network(te_mat_asym_.copy(), coords_model, figsize, file_network)
+
+# idea: determine driver and receiver nodes with mean TE as baseline
 
 
 
@@ -391,9 +450,9 @@ df_perm.to_csv(path_model + model + model_seg + name_df)
 
 
 # %% Parallel process time order permutations
-n_perm = 5040
+n_perm = 40320
 n_cores = 16
-hist_len = 7
+hist_len = n_timesteps
 lexperms = lexographic_permutations(n_perm, np.arange(n_timesteps))
 
 def task(name, perms):
@@ -442,7 +501,8 @@ with mantichora(nworkers=n_cores) as mcore:
         mcore.run(task, 'task %d' % i, lexperms[int(n_perm / n_cores) * i: int(n_perm / n_cores) * (i+1)])
     returns = mcore.returns()
 end = time.time()
-print('Execution time: %d seconds' % (end - start))
+print('Execution time:', (end - start) / 60, 'minutes')
+print('Execution time per permutation: %d seconds' % ((end - start) / n_perm))
 
 
 # join dictionaries from list of dictionaries
@@ -452,11 +512,14 @@ for t in range(n_cores):
         d.setdefault(key, []).extend(value)
 
 df_perm = pd.DataFrame(d)
-df_perm = df_perm.sort_values('Kendalls tau-b (perm.)', key=abs)
-
 name_df = 'df_perm_%d.csv' % n_perm
 df_perm.to_csv(path_model + model + model_seg + name_df)
 #df = df.round(pd.Series(6, df.drop('Permutation', axis=1).columns))
+
+
+
+# %% '''Load permutation results'''
+df_perm = pd.read_csv(path_model + model + model_seg + '_df_perm_100000.csv', index_col=0)
 
 
 
@@ -465,7 +528,7 @@ val = []
 var1 = []
 var2 = []
 
-df = df_perm
+df = df_perm.sort_values('Kendalls tau-b (perm.)', key=abs)
 
 for col1 in df.iloc[:, 1:]:
     pos = df.columns.get_loc(col1)
@@ -484,18 +547,18 @@ df_corr = pd.DataFrame(d2).sort_values('Pearsons r', key=abs, ascending=False)
 print(df_corr)
 
 # group observatios by Kendall corr. into equally sized bins
-n_bin = 5
-df["Kendall correlation to ordered sequence"] = pd.qcut(df['Kendalls tau-b (perm.)'], n_bin, 
-labels=["strong negative", "weak negative", "none", "weak positive", "strong positive"],)
+#n_bin = 5
+#df["Kendall correlation to ordered sequence"] = pd.qcut(df['Kendalls tau-b (perm.)'], n_bin, 
+#labels=["strong negative", "weak negative", "insufficient", "weak positive", "strong positive"],)
 #labels=["- -", "-", "none", "+", "+ +"])
 
 # group observations by by Kendall corr. into fixed bins
-df["Kendall correlation vs ordered sequence"] = pd.cut(df['Kendalls tau-b (perm.)'],[-1, -0.75, -0.5, 0.5, 0.75, 1], #[0.7, 0.75, 0.8, 0.85, 0.95, 1,], #
-#labels=['0.70 - 0.75', '0.75 - 0.80', '0.80 - 0.85', '0.85 - 0.95', '0.95 - 1.00'])
-labels=["-1 to -0.75", "-0.75 to -0.5", "-0.5 to 0.5", "0.5 to 0.75", "0.75 to 1"],)
+df["Kendall correlation vs ordered sequence"] = pd.cut(df['Kendalls tau-b (perm.)'],[-1, -0.75, -0.5, 0.5, 0.75, 1],
+#labels=["-1 to -0.75", "-0.75 to -0.5", "-0.5 to 0.5", "0.5 to 0.75", "0.75 to 1"],)
+labels=["strong negative", "weak negative", "insufficient", "weak positive", "strong positive"])
 
-df["99th percentile"] = df['Kendalls tau-b (perm.)'] > df['Kendalls tau-b (perm.)'].quantile(0.995)
-df['TE sum zscore'] = (df['TE sum'] - df['TE sum'].mean()) / df['TE sum'].std(ddof=0)
+df["999th percentile"] = df['Kendalls tau-b (perm.)'] > df['Kendalls tau-b (perm.)'].quantile(0.999)
+#df['TE sum zscore'] = (df['TE sum'] - df['TE sum'].mean()) / df['TE sum'].std(ddof=0)
 
 #filtered_df = df[(df['TE std'] < df['TE std'].quantile(0.2)) & 
 #                 (df['TE direction'] < df['TE direction'].quantile(0.025)) & 
@@ -507,6 +570,9 @@ df['TE sum zscore'] = (df['TE sum'] - df['TE sum'].mean()) / df['TE sum'].std(dd
 #                  (df['TE sum zscore'] < 0.5) & (df['TE sum zscore'] > 0)]
 #majority_sequence = scipy.stats.mode(np.stack(filtered_df2['Permutation'], axis=0), axis=0)
 #print(majority_sequence)
+
+vars = ['TE direction', 'TE sum', 'Asym TE sum', 'TE std']
+filtered_df6 = df[df['TE direction'] > df['TE direction'].quantile(0.995)]
 
 
 
@@ -522,15 +588,13 @@ plt.rcParams["figure.figsize"] = (12,6)
 plt.rcParams['figure.dpi'] = 75
 sns.set_context("notebook", font_scale=1.3, rc={"lines.linewidth": 2.5})
 sns.set_style('whitegrid')
-
-cmap = sns.color_palette(["#648FFF", "#785EF0", "#DC267F", "#FE6100", "#FFB000"])
 cmap = sns.color_palette(["#FFBC3F", "#EE8051", "#D875B5", "#A266EC", "#5F95F7"])
-vars = ['TE direction', 'TE sum', 'TE std']
+#cmap = sns.color_palette(["#FFBC3F", "#EE8051", "#D3D3D3", "#A266EC", "#5F95F7"])
 
 for y_var in vars:
-    sns.violinplot(data=df, x="Kendall correlation vs ordered sequence", y=y_var, inner="box", area="count", cut=1, palette=cmap)
-    sns.stripplot(x=df["Kendall correlation vs ordered sequence"][df["99th percentile"]], y=df[y_var][df["99th percentile"]], 
-                color='#5F95F7', zorder=2, linewidth=2, size=10, jitter=False)
+    sns.violinplot(data=filtered_df6, x="Kendall correlation vs ordered sequence", y=y_var, inner="box", area="count", cut=1, palette=cmap)
+    sns.stripplot(x=df["Kendall correlation vs ordered sequence"][df["999th percentile"]], y=df[y_var][df["999th percentile"]], 
+                color='white', edgecolor='#5F95F7', zorder=2, linewidth=1, size=5, jitter=False)
     sns.despine(left=True, bottom=True)
 
     patch_violinplot()
@@ -541,27 +605,25 @@ for y_var in vars:
 # %% '''Plot scatter plots'''
 plt.rcParams["figure.figsize"] = (12,12)
 plt.rcParams['figure.dpi'] = 100
-sns.set_context("notebook", font_scale=1.3, rc={"lines.linewidth": 2.5})
-sns.set_style('white')
+sns.set_context("notebook", font_scale=1, rc={"lines.linewidth": 2.5})
+sns.set_style('whitegrid')
 
 cmap_ibm = sns.color_palette(["#648FFF", "#785EF0", "#E23689", "#F5711E", "#FFB000"])
 cmap = sns.color_palette(["#FFBC3F", "#EE8051", "#D875B5", "#A266EC", "#5F95F7"])
-cmap = sns.color_palette(["#FFBC3F", "#EE8051", "#D3D3D3", "#A266EC", "#5F95F7"])
-vars = ['TE direction', 'TE median', 'TE mean']
-extend = 0.1
-filter = df[df['Kendall correlation vs ordered sequence'].isin(['strong positive', 'weak positive'])]
+cmap = sns.color_palette(["#FFBC3F", "#EE8051", "#D3D3D3", "#A266EC", "#5F95F7"]) # grey for insufficient
+extend = 0.05
 
 for y_var1 in vars:
     pos = vars.index(y_var1)
     for y_var2 in vars[:pos]:
         g = sns.JointGrid(data=df, x=y_var1, y=y_var2, space=0, hue='Kendall correlation vs ordered sequence', palette=cmap)
-        g.plot_joint(sns.scatterplot, s=30, alpha=1, linewidth=0, edgecolor='black', hue='Kendall correlation vs ordered sequence', palette=cmap)
+        g.plot_joint(sns.scatterplot, s=30, alpha=0.4, linewidth=0, edgecolor='black', hue='Kendall correlation vs ordered sequence', palette=cmap)
         g.plot_marginals(sns.kdeplot, fill=True, alpha=0.4, linewidth=0, edgecolor=None, palette=cmap)
         #g.refline(x=df[y_var1].quantile(0.1), y=df[y_var2].quantile(0.1), color='black', linestyle='--', linewidth=.5)
-        g.ax_joint.scatter(x=df[df["99th percentile"]][y_var1], y=df[df["99th percentile"]][y_var2], s=30, alpha=1, linewidth=0.5, edgecolor='black', color="none", zorder=1)
+        g.ax_joint.scatter(x=df[df["999th percentile"]][y_var1], y=df[df["999th percentile"]][y_var2], s=20, alpha=0.6, linewidth=2, edgecolor='#5F95F7', color="white", zorder=1)
         #g.ax_joint.scatter(x=filtered_df2[y_var1], y=filtered_df2[y_var2], s=75, alpha=0.4, linewidth=0.8, edgecolor='black', color="white", zorder=1)
         #legend_labels = [t.get_text() for t in g.ax_joint.get_legend().get_texts()] labels=[*legend_labels, '99th percentile']
-        g.ax_joint.legend(title='Seq. Kendall Correlation', loc='lower left', bbox_to_anchor=(1, 1), ncol=1, frameon=True)
+        g.ax_joint.legend(title='Kendall Correlation', loc='lower left', bbox_to_anchor=(1, 1), ncol=1, frameon=True)
 
         # extend xlim and ylim
         xlim = g.ax_joint.get_xlim()
@@ -573,34 +635,37 @@ for y_var1 in vars:
 
         plt.show()
 
+
+
 # %% '''Bivariate KDE plots'''
-plt.rcParams["figure.figsize"] = (12,12)
-plt.rcParams['figure.dpi'] = 100
-sns.set_context("notebook", font_scale=1.3, rc={"lines.linewidth": 2.5})
+plt.rcParams["figure.figsize"] = (10,10)
+plt.rcParams['figure.dpi'] = 80
+sns.set_context("notebook", font_scale=1, rc={"lines.linewidth": 2.5})
 sns.set_style('dark')
 
 alpha = 0.6
-treshold = 0.2
+treshold = 0.1
 levels = 20
+extend = 0
 
 for y_var1 in vars:
     pos = vars.index(y_var1)
     for y_var2 in vars[:pos]:
-        g = sns.kdeplot(data=df[df['Kendall correlation vs ordered sequence'].isin(['-0.5 to 0.5'])], x=y_var1, y=y_var2, color="#D3D3D3", fill=True, thresh=treshold, levels=levels, cbar=False, cbar_kws={"orientation": "horizontal", "shrink": .5, "label": "Count"})
-        g = sns.kdeplot(data=df[df['Kendall correlation vs ordered sequence'].isin(['-0.75 to -0.5'])], x=y_var1, y=y_var2, color="#EE8051", antialiased=True, alpha=alpha, fill=True, thresh=treshold, levels=levels, cbar=False, cbar_kws={"orientation": "horizontal", "shrink": .5, "label": "Count"})
-        g = sns.kdeplot(data=df[df['Kendall correlation vs ordered sequence'].isin(['-1 to -0.75'])], x=y_var1, y=y_var2, color="#FFBC3F", antialiased=True, alpha=alpha, fill=True, thresh=treshold, levels=levels, cbar=False, cbar_kws={"orientation": "horizontal", "shrink": .5, "label": "Count"})
-        g = sns.kdeplot(data=df[df['Kendall correlation vs ordered sequence'].isin(['0.5 to 0.75'])], x=y_var1, y=y_var2, color="#A266EC", antialiased=True, alpha=alpha, fill=True, thresh=treshold, levels=levels, cbar=False, cbar_kws={"orientation": "horizontal", "shrink": .5, "label": "Count"})
-        g = sns.kdeplot(data=df[df['Kendall correlation vs ordered sequence'].isin(['0.75 to 1'])], x=y_var1, y=y_var2, color="#5F95F7", antialiased=True, alpha=alpha, fill=True, thresh=treshold, levels=levels, cbar=False, cbar_kws={"orientation": "horizontal", "shrink": .5, "label": "Count"})
-        g.scatter(x=df[df["99th percentile"]][y_var1], y=df[df["99th percentile"]][y_var2], alpha=0.8, s=30, linewidth=0.5, color='white', edgecolor="#5F95F7", zorder=10)
-        #g.legend(title='Seq. Kendall Correlation', loc='lower left', bbox_to_anchor=(1, 1), ncol=1, frameon=True)
+        g = sns.kdeplot(data=df[df['Kendall correlation vs ordered sequence'].isin(['insufficient'])], x=y_var1, y=y_var2, color="#D3D3D3", fill=True, thresh=treshold, levels=levels, cbar=False, cbar_kws={"orientation": "horizontal", "shrink": .5, "label": "Count"})
+        g = sns.kdeplot(data=df[df['Kendall correlation vs ordered sequence'].isin(['weak negative'])], x=y_var1, y=y_var2, color="#EE8051", antialiased=True, alpha=alpha, fill=True, thresh=treshold, levels=levels, cbar=False, cbar_kws={"orientation": "horizontal", "shrink": .5, "label": "Count"})
+        g = sns.kdeplot(data=df[df['Kendall correlation vs ordered sequence'].isin(['strong negative'])], x=y_var1, y=y_var2, color="#FFBC3F", antialiased=True, alpha=alpha, fill=True, thresh=treshold, levels=levels, cbar=False, cbar_kws={"orientation": "horizontal", "shrink": .5, "label": "Count"})
+        g = sns.kdeplot(data=df[df['Kendall correlation vs ordered sequence'].isin(['weak positive'])], x=y_var1, y=y_var2, color="#A266EC", antialiased=True, alpha=alpha, fill=True, thresh=treshold, levels=levels, cbar=False, cbar_kws={"orientation": "horizontal", "shrink": .5, "label": "Count"})
+        g = sns.kdeplot(data=df[df['Kendall correlation vs ordered sequence'].isin(['strong positive'])], x=y_var1, y=y_var2, color="#5F95F7", antialiased=True, alpha=alpha, fill=True, thresh=treshold, levels=levels, cbar=False, cbar_kws={"orientation": "horizontal", "shrink": .5, "label": "Count"})
+        g.scatter(x=df[df["999th percentile"]][y_var1], y=df[df["999th percentile"]][y_var2], alpha=0.8, s=20, linewidth=2, color='white', edgecolor="#5F95F7", zorder=10)
+        #g.legend(title='Kendall Correlation', loc='lower left', bbox_to_anchor=(1, 1), ncol=1, frameon=True)
 
         # extend xlim and ylim
-        xlim = g.get_xlim()
-        xrange = xlim[1] - xlim[0]
-        ylim = g.get_ylim()
-        yrange = ylim[1] - ylim[0]
-        g.set_xlim(xlim[0] + extend*xrange, xlim[1] - extend*xrange)
-        g.set_ylim(ylim[0] + extend*yrange, ylim[1] - extend*yrange)
+        #xlim = g.get_xlim()
+        #xrange = xlim[1] - xlim[0]
+        #ylim = g.get_ylim()
+        #yrange = ylim[1] - ylim[0]
+        #g.set_xlim(xlim[0] + extend*xrange, xlim[1] - extend*xrange)
+        #g.set_ylim(ylim[0] + extend*yrange, ylim[1] - extend*yrange)
 
         for line in g.get_lines():
             line.set_alpha(0)
