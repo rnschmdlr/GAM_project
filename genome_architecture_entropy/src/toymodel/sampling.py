@@ -51,7 +51,7 @@ def add_noise(xy_coord_mat, amount):
     return noisy_signal
 
 
-def slice(xy_coord_mat, sample_n=1000, wdft=0.1):
+def slice(xy_coord_mat, sample_n=1000, wdf_tresholds=[0.1, 0.3]):
     """
     This function intersects a set of xy coordinates and records for each point the slices it
     intersects with. 
@@ -106,7 +106,7 @@ def slice(xy_coord_mat, sample_n=1000, wdft=0.1):
     seg_mat = np.zeros((sample_n, len(points.geoms)))
     segregation = np.zeros(len(points.geoms))
     n_loci = xy_coord_mat.shape[1]
-    wdf_treshold = int(n_loci * wdft) # window detection frequency treshold (lower bound)
+    wdf_tresholds = [int(treshold * n_loci) for treshold in wdf_tresholds] # window detection frequency treshold (lower bound)
 
     #for iter in range(sample_n):
     iter = 0
@@ -126,7 +126,7 @@ def slice(xy_coord_mat, sample_n=1000, wdft=0.1):
             #seg_mat[iter, p] = slice_.contains(points[p])
 
         # next iteration only if slice is non-empty (any True)
-        if np.sum(segregation) > wdf_treshold:
+        if np.sum(segregation) > wdf_tresholds[0] and np.sum(segregation) < wdf_tresholds[1]:
             # check if slice is a duplicate (no new information)
             #if not any(np.equal(seg_mat, segregation).all(1)):
             seg_mat[iter] = segregation
