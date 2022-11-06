@@ -2,27 +2,29 @@
 import os
 import numpy as np
 import pandas as pd
-import subprocess
-from tqdm.auto import tqdm
 from pathlib import Path
-from Bio.PDB import PDBIO
-from Bio.PDB import Selection
-from Bio.PDB.PDBParser import PDBParser
+from tqdm.auto import tqdm
+from atpbar import atpbar
+from mantichora import mantichora
+import subprocess
 
-os.chdir('/Users/pita/Documents/Rene/GAM_project/genome_architecture_entropy/src/')
-#os.chdir('/fast/AG_Metzger/rene/GAM_project/genome_architecture_entropy/src/')
-from toymodel import chaingen as gen
+os.chdir('/Users/pita/Documents/Rene/GAM_project/genome_architecture_entropy/')
+#os.chdir('/fast/AG_Metzger/rene/GAM_project/genome_architecture_entropy/')
+from src.toymodel import chaingen as gen
 
-path_cwd        = Path.cwd()
-path_project    = path_cwd.parents[0]
+# import run
+from ext.md_soft import run as rn
+
+path_project    = Path.cwd()
+path_toymodels  = str(path_project / 'data/toymodels/')
 path_restraints = str(path_project / 'data/md_soft/restraints/')
 path_out        = str(path_project / 'data/md_soft/')
-path_config     = str(path_project / 'data/md_soft/config.ini')
+#path_config     = str(path_project / 'data/md_soft/config.ini')
 path_ini_struct = str(path_project / 'data/md_soft/initial_structure.pdb')
 path_run_mdsoft = str(path_project / 'ext/md_soft/run.py')
 
 
-
+# %%
 def init_tads(seeds):
     # initialize tad boundaries +1, -1 of seed locs
     for i in range(seeds.shape[0]):
@@ -38,7 +40,7 @@ def init_tads(seeds):
 def write_tads_to_file(tads, num):
     # convert to list and print to spec
     restraints = tads.tolist()
-    file_restraint = path_restraints + '/restraint%d.rst' % (num)
+    file_restraint = path_restraints + '/restraint%d.rst' % (num+1)
 
     with open(file_restraint, 'w') as f:
         for boundary in restraints:
@@ -138,112 +140,46 @@ def generate_boundary_sequence(tads, steps, lbound, rbound):
 
     return iterations
 
-
-def translocate_xy(pdb_input, pdb_output):
-    # read unchanged file to memory
-    with open(pdb_input, 'r') as pdb_input_file:
-        list_of_lines = pdb_input_file.readlines()
-
-    # load structures and lists of atoms
-    parser = PDBParser()
-    structure_init = parser.get_structure('init', pdb_input)
-    structure_out = parser.get_structure('out', pdb_output)
-    # TODO check if length of chains matches
-
-    atoms_init = Selection.unfold_entities(structure_init, 'A')
-    atoms_out = Selection.unfold_entities(structure_out, 'A')
-
-    # replace coordinates of atoms_init with those of atoms_out
-    for atom in range(len(atoms_out)):
-        coord_out = atoms_out[atom].get_coord()
-        atoms_init[atom].set_coord(coord_out)
-
-        if coord_out[2] > 1:
-            print('Warning: z-coordinate > 1 for atom' + str(atom+1) + coord_out)
         
-    io = PDBIO()
-    io.set_structure(structure_init)
-    io.save(pdb_input)
-
-    with open(pdb_input, 'a') as pdb_input_file_edited:
-        pdb_input_file_edited.writelines(list_of_lines[36:])
-
-        
-def run_sim(series_len, chain_len, pdb_init):
-    colspecs = [(0, 6), (6, 11), (12, 16), (16, 17), (17, 20), (21, 22), (22, 26),
-                    (26, 27), (30, 38), (38, 46), (46, 54), (54, 60), (60, 66), (76, 78), (78, 80)]
+def run_sim(series_len, chain_len, name):
+    colspecs = [(0, 6), (6, 11), (12, 16), (16, 17), (17, 20), (21, 22), (22, 26), (26, 27), (30, 38), (38, 46), (46, 54), (54, 60), (60, 66), (76, 78), (78, 80)]
     cols = ['x','y']
-    names = ['ATOM', 'serial', 'name', 'altloc', 'resname', 'chainid', 'resseq',
-                'icode', 'x', 'y', 'z', 'occupancy', 'tempfactor', 'element', 'charge']
-    path_min_pdb = path_out + '/min_struct.pdb'
-    cmd = 'python ' + path_run_mdsoft + ' -c ' + path_config
-    series = np.empty((series_len+1, chain_len, 2))
+    names = ['ATOM', 'serial', 'name', 'altloc', 'resname', 'chainid', 'resseq', 'icode', 'x', 'y', 'z', 'occupancy', 'tempfactor', 'element', 'charge']
+
+    path_config = path_out + '/config_%s.ini' % (name)
+    #cmd = 'python ' + path_run_mdsoft + ' -c ' + path_config
+    series = np.empty(shape=(series_len, chain_len, 2))
 
     for state in range(series_len):
-        # replace restraints and input structure paths in config file
-        with open(path_config, 'r') as config_file:
-            list_of_lines = config_file.readlines()
-        list_of_lines[18] = 'HR_RESTRAINTS_PATH =' + path_restraints + '/restraint%d.rst\n' % (state)
         # for state 0 the initial structure is chosen. After that the new minimized structures are used.
-        if state > 0:
-            list_of_lines[2] = 'INITIAL_STRUCTURE_PATH =' + path_min_pdb + '\n'
-        else:
-            list_of_lines[2] = 'INITIAL_STRUCTURE_PATH =' + pdb_init + '\n'
-        with open(path_config, 'w') as config_file:
-            config_file.writelines(list_of_lines)
+        if state == 0: 
+            pdb_path = path_out + '/initial_structure_%s.pdb' % (name)  
+            skiprows = None
+        else: 
+            # replace restraints and input structure paths in config file
+            with open(path_out + '/config.ini', 'r') as config_file:
+                list_of_lines = config_file.readlines()
+            list_of_lines[2] = 'INITIAL_STRUCTURE_PATH =' + pdb_path + '\n'
+            #list_of_lines[3] = 'FORCEFIELD_PATH =' + path_run_mdsoft + '/forcefields/classic_sm_ff.xml' + '\n'
+            list_of_lines[18] = 'HR_RESTRAINTS_PATH =' + path_restraints + '/restraint%d.rst\n' % (state)
+            list_of_lines[24] = 'MINIMIZED_FILE =' + path_out + '/min_struct_%s.pdb' % (name) + '\n'
+            with open(path_config, 'w') as config_file:
+                config_file.writelines(list_of_lines)
 
-        # run md_soft with args: python run.py -c config.ini
-        #subprocess.run(cmd, shell=True)
+            # run md_soft with args: python run.py -c config.ini
+            #subprocess.run(cmd, shell=True)#, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            rn.main([path_run_mdsoft, '-c', path_config])
 
-        # execute subprocess.run with cmd and non verbose
-        subprocess.run(cmd, shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            pdb_path = path_out + '/min_struct_%s.pdb' % (name)
+            skiprows = [0]
 
-        # this adds the initial structure as T=0 to the coordinate array first
-        #if state == 0:
-        #    pdb = pd.read_fwf(pdb_init, names=names, colspecs=colspecs, usecols=lambda x: x  in cols).dropna()
-        #    series[state,:,:] = np.array(pdb, dtype=float)
-
-        pdb = pd.read_fwf(path_min_pdb, names=names, skiprows=[0], colspecs=colspecs, usecols=lambda x: x  in cols).dropna()
-        series[state+1,:,:] = np.array(pdb, dtype=float)
+        pdb = pd.read_fwf(pdb_path, names=names, skiprows=skiprows, colspecs=colspecs, usecols=lambda x: x  in cols).dropna()
+        series[state,:,:] = np.array(pdb, dtype=float)
 
     return series
 
 
 if __name__ == '__main__': 
-    # toymodel6: 2 loops 
-    chain_len = 25
-    tad_seeds = np.array([7, 15])
-    steps = [[0],[0,1],[0,1],[-1,1],[1],[1],[1],[1]]
-
-    # toymodel4_2: 1 longer loop with a unique realisation per slice
-    #chain_len = 31
-    #tad_seeds = np.array([15])
-    #steps = [[0] for i in range(15)]
-
-    # toymodel5: 2 loops with variable number of realisations per time step
-    #chain_len = 31
-    #tad_seeds = np.array([8, 23])
-    #steps = [[0],[0,1],[0],[0,1],[0],[0,1],[None],[1],[None],[1],[None],[1],[None]]
-
-    realisations = 500
-    series = np.zeros(shape=(realisations, len(steps)+1, chain_len, 2))
-    for itr in tqdm(range(realisations)):
-        # initialise coordinates to pdb input file 
-        coords = gen.self_avoiding_random_walk(chain_len)
-        file_name = '/initial_structure.pdb'
-        pdbfile = str(path_out + file_name)
-        gen.save_points_as_pdb(coords, pdbfile)
-
-        # start model generation
-        tads_initial = init_tads(tad_seeds)
-        timesteps = generate_boundary_sequence(tads_initial, steps, lbound=1, rbound=chain_len)
-        series[itr] = run_sim(timesteps, chain_len, pdbfile)
-
-    series_grouped = np.reshape(series, newshape=(realisations * (timesteps+1), chain_len, 2), order='F')
-    series_indiv = np.reshape(series, newshape=(realisations * (timesteps+1), chain_len, 2), order='C')
-    model = '/toymodel6_multi_1000.npy'
-    np.save(path_out + model, series)
-
     # toymodel1
     #tad_seeds = np.array([7, 20, 31]) 
 
@@ -260,3 +196,64 @@ if __name__ == '__main__':
     # toymodel3: different extrusion start times
     #tad_seeds = np.array([5, 25])
     #steps = [[0],[0],[0],[0],[0],[0],[0,1],[0,1],[0,1],[0,1],[0,1],[1],[1],[1],[1],[1],[1]]
+
+    # toymodel4_2: 1 longer loop with a unique realisation per slice
+    #chain_len = 31
+    #tad_seeds = np.array([15])
+    #steps = [[0] for i in range(15)]
+
+    # toymodel5: 2 loops with variable number of realisations per time step
+    #chain_len = 31
+    #tad_seeds = np.array([8, 23])
+    #steps = [[0],[0,1],[0],[0,1],[0],[0,1],[None],[1],[None],[1],[None],[1],[None]]
+
+    # toymodel6: 2 loops 
+    model_n = 6
+    chain_len = 25
+    tad_seeds = np.array([7, 15])
+    steps = [[0],[0,1],[0,1],[-1,1],[1],[1],[1],[1]]
+
+    # toymodel7: longer dynamic model with cohesin dissociation
+    #chain_len = 50
+    tad_seeds = np.array([10,18,28,35])
+    steps = [[0,1,2,3], [0,1,2,3], [0,-1,2,3], [0,-1,3], [0,3], [0,3], [0,3]]
+
+
+    n_realisations = 500
+
+    series = np.zeros(shape=(n_realisations, len(steps), chain_len, 2))
+    for itr in tqdm(range(n_realisations)):
+        # initialise coordinates to pdb input file 
+        coords = gen.self_avoiding_random_walk(chain_len)
+        file_name = '/initial_structure_task_0.pdb'
+        pdbfile = path_out + file_name
+        gen.save_points_as_pdb(coords, pdbfile)
+
+        # start model generation
+        tads_initial = init_tads(tad_seeds)
+        timesteps = generate_boundary_sequence(tads_initial, steps, lbound=1, rbound=chain_len)
+        series[itr] = run_sim(timesteps, chain_len, 'task_0')
+
+    file = '/model%d/toymodel%d_multi_%d.npy' % (model_n, model_n, n_realisations)
+    np.save(path_toymodels + file, series)
+
+
+    #n_cores = 2
+    #tads_initial = init_tads(tad_seeds)
+    #timesteps = generate_boundary_sequence(tads_initial, steps, lbound=1, rbound=chain_len)
+    #def task(name, realisations):
+    #    series = np.zeros(shape=(realisations, len(steps), chain_len, 2))
+    #    for itr in atpbar(range(realisations), name=name):
+    #        # initialise coordinates to pdb input file 
+    #        coords = gen.self_avoiding_random_walk(chain_len)
+    #        file_name = '/initial_structure_%s.pdb' % (name)
+    #        pdbfile = path_out + file_name
+    #        gen.save_points_as_pdb(coords, pdbfile)
+    #        series[itr] = run_sim(timesteps, chain_len, name)
+    #    return series
+
+    #with mantichora(nworkers=n_cores) as mcore:
+    #    for i in range(n_cores):
+    #        mcore.run(task, 'task_%d' % i, n_realisations // n_cores)
+    #    returns = mcore.returns()
+    #series = np.concatenate([returns[i] for i in range(n_cores)], axis=0)
