@@ -3,7 +3,7 @@ import numpy as np
 
 def random_versor():
     x = 1 #np.random.uniform(-1, 1)
-    y = np.random.uniform(-1, 1) / 10
+    y = np.random.uniform(-1, 1)
     z = 0 #np.random.uniform(-1, 1)
     d = (x ** 2 + y ** 2 + z ** 2) ** 0.5
     return np.array([x / d, y / d, z / d])
