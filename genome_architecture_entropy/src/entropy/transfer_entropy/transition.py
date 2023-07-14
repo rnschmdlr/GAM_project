@@ -82,16 +82,20 @@ def bin_probs(seg_mat, n_bin, hist_len=1):
 
         for idx in range(0, n_loci-bin_len+1, bin_len):
             i = int(idx / bin_len)
-            bins_a[i] = seg_mat[tstep_i, :, idx:idx+bin_len]
             bins_b[i] = seg_mat[tstep_j, :, idx:idx+bin_len]
+
+            vec = np.arange(0, n_loci)
+            #np.random.shuffle(vec) # for TE sign
+            bins_a[i] = seg_mat[tstep_i, :, vec[idx]:vec[idx]+bin_len]
+            
 
         # TODO make this multi-threaded
         trans_probs[tstep_i, tstep_j] = calc_probs(bins_a, bins_b)
 
     transition_pmat_inner = np.moveaxis(trans_probs, (2,3), (0,1))
     
-    for loc1 in range(n_bin):
-        for loc2 in range(n_bin):
+    for loc1 in range(n_loci):
+        for loc2 in range(n_loci):
             outdeg = np.sum(transition_pmat_inner[loc1, loc2], axis=1)[:, None] # weighted degrees as col vector
             deg_mat = np.zeros_like(transition_pmat_inner[loc1, loc2]) 
             np.fill_diagonal(deg_mat, outdeg) # degree matrix D
@@ -108,22 +112,13 @@ def calc_probs(bins_a, bins_b, prnt=False):
     dist_mat = np.sum(np.sum(np.abs(dist), axis=-1), axis=-1) 
 
     # scale matrix from distance 0 to inf -> similarity 1 to 0 so that an all zero distance matrix becomes all ones
-    #dist_mins = np.subtract(dist_mat, min_dist, out=np.zeros_like(dist_mat), where=dist_mat!=0)
-    #sim_mat = np.euler_gamma ** (dist_mat / max_dist)
     sim_mat = 1 - (dist_mat / max_dist)
 
-    # when there is no difference between two states, the distances must still sum > 0 so that
-    # all degrees are > 0 and the degree matrix can be inverted. The transition probability will
-    # become distributed equally
-    #zero_rows = np.where(np.all(np.isclose(sim_mat, 0), axis=1))
-    #sim_mat[zero_rows] = 1
-
-    #outdeg = np.sum(sim_mat, axis=1)[:, None] # weighted degrees as col vector
-    #deg_mat = np.zeros_like(sim_mat) 
-    #np.fill_diagonal(deg_mat, outdeg) # degree matrix D
-
     # P = D^-1 * A
-    #P = np.matmul(np.linalg.inv(deg_mat), sim_mat)
+    outdeg = np.sum(sim_mat, axis=1)[:, None] # weighted degrees as col vector
+    deg_mat = np.zeros_like(sim_mat) 
+    np.fill_diagonal(deg_mat, outdeg) # degree matrix D
+    P = np.matmul(np.linalg.inv(deg_mat), sim_mat)
 
     if prnt:
         print(max_dist)
