@@ -1,0 +1,10 @@
+
+/md_soft/*.pdb
+/md_soft/restraints/*
+
+/md_soft/
+/toymodels/
+/toymodels/model7/old\ pngs/
+/results/
+/experimental/
+!/md_soft/*.ini
