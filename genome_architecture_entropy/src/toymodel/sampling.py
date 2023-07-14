@@ -135,17 +135,17 @@ def slice(xy_coord_mat, sample_n=1000, wdf_tresholds=[0.1, 0.3]):
             
 
             if plot:
-                plt.plot(x,y, linewidth = 0.1, color='k', fillstyle='full', alpha=0.01)
+                plt.plot(x,y, linewidth = 0.1, color='k', fillstyle='full', alpha=0.1)
                 ax = plt.gca()
-                ax.set_xlim([xmin_sample - width_sample, xmax_sample + width_sample])
-                ax.set_ylim([ymin_sample - height_sample, ymax_sample + height_sample])
+                ax.set_xlim([xmin_slice - 1, xmax_slice + 1])
+                ax.set_ylim([ymin_slice - 1, ymax_slice + 1])
                 ax.set_aspect('equal', 'box')
 
     if plot:
         sample_area = patches.Rectangle((xmin_sample, ymin_sample), 
                                         width_sample, height_sample, 
                                         linewidth=.5, 
-                                        edgecolor='white', 
+                                        edgecolor='black', 
                                         facecolor='none', 
                                         zorder=sample_n)
 
@@ -157,6 +157,7 @@ def slice(xy_coord_mat, sample_n=1000, wdf_tresholds=[0.1, 0.3]):
                                         zorder=sample_n)
         ax.add_patch(slice_area)
         ax.add_patch(sample_area)
+        ax.plot(xy_coord_mat[0], xy_coord_mat[1], 'o', markersize=5, color='k', alpha=1)
         plt.show()
 
     return seg_mat
