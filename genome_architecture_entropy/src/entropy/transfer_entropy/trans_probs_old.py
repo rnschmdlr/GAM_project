@@ -87,8 +87,10 @@ def bin_probs(seg_mat, n_bin, hist_len=1):
 
         # TODO make this multi-threaded
         trans_probs[tstep_i, tstep_j] = calc_probs(bins_a, bins_b)
+    
+    transitions = np.moveaxis(trans_probs, (2,3), (0,1))
 
-    return trans_probs
+    return transitions
 
 
 def calc_probs(bins_a, bins_b, prnt=False):
@@ -100,7 +102,7 @@ def calc_probs(bins_a, bins_b, prnt=False):
 
     # scale matrix from distance 0 to inf -> similarity 1 to 0 so that an all zero distance matrix becomes all ones
     dist_mins = np.subtract(dist_mat, min_dist, out=np.zeros_like(dist_mat), where=dist_mat!=0)
-    sim_mat = ((dist_mins) / (max_dist - min_dist))
+    sim_mat = 1 - ((dist_mins) / (max_dist - min_dist))
 
     # when there is no difference between two states, the distances must still sum > 0 so that
     # all degrees are > 0 and the degree matrix can be inverted. The transition probability will
