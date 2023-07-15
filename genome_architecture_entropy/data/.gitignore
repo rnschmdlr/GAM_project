@@ -3,8 +3,8 @@
 /md_soft/restraints/*
 
 /md_soft/
-/toymodels/
-/toymodels/model7/old\ pngs/
+/my_models/
+/my_models/model7/old\ pngs/
 /results/
 /experimental/
 !/md_soft/*.ini
