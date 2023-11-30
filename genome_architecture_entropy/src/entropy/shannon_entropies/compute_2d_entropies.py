@@ -42,7 +42,7 @@ def corrected_shannon_entropy(matrix):
     return corr_h
 
 
-def shannon_entropy_multivar(matrix, axis):
+def shannon_entropy_axis(matrix, axis):
     """Returns the entropy for each variable (row or col) of a matrix"""
     ones = np.apply_along_axis(np.sum, axis, matrix)
     zeros = matrix.shape[axis] - ones
@@ -131,12 +131,12 @@ def mutual_information(je_mat):
     return mi_mat
 
 
-def normalized_mutual_information(seg_mat, c=True):
+def normalized_mutual_information(seg_mat, c=False):
     je_mat = all_joint_entropy(seg_mat)
     mi_mat = mutual_information(je_mat)
     nloci = np.shape(mi_mat)[0]
     nmi_mat = np.zeros_like(mi_mat)
-    entropy_list = shannon_entropy_multivar(seg_mat, 1)
+    entropy_list = shannon_entropy_axis(seg_mat, 1)
 
     for wy in range(nloci):
         for wx in range(nloci):
