@@ -40,7 +40,7 @@ def vector_difference(method_label, matrix, vmax=None, mode=None):
     plt.show()
 
 
-def variability(matrix, title=None, unit=None, interesting_pairs=None, vmax=None, vmin=None, ratio=False, center=None):
+def variability(matrix, title=None, unit=None, interesting_pairs=None, vmax=None, vmin=None, ratio=False, center=False):
     # fill upper triangular with NaNs
     tril = np.tril_indices(matrix.shape[0], k=0)
     matrix[tril] = np.nan
@@ -48,12 +48,12 @@ def variability(matrix, title=None, unit=None, interesting_pairs=None, vmax=None
     cmap = mcmap
 
     # special ratio mode
-    if ratio == True:
+    if ratio:
         vmax = np.nanpercentile(matrix, 99)
         vmin = np.nanpercentile(matrix, 1)  
 
         # shifted ratio center for norm and colormap
-        if center == None:
+        if center:
             center = (vmax + vmin) / 2
             print(f"Values centered around: {round(center, 2)}")
 
@@ -87,36 +87,6 @@ def variability(matrix, title=None, unit=None, interesting_pairs=None, vmax=None
         for (row, col) in interesting_pairs:
             plt.text(col, row, '+', ha='center', va='center', color='yellow', fontsize=16, weight='bold',
                      path_effects=[pe.withStroke(linewidth=2, foreground="black")])
-            
-    plt.grid(False)
-    plt.show()
-
-
-def variability_difference(matrix, mode=None, operation=None, mid=None):
-    # robust min and max
-    if mid is None:
-        vmax = np.nanpercentile(matrix, 99)
-        vmin = np.nanpercentile(matrix, 1)
-        # Create a TwoSlopeNorm normalization
-        midpoint = 0.5 * (vmax + vmin)
-    else:
-        midpoint = mid
-        vmax = np.nanmax(matrix) #np.nanpercentile(matrix, 99)
-        vmin = np.nanmin(matrix) #np.nanpercentile(matrix, 1)
-        max_abs = max(np.abs(vmax), np.abs(vmin))
-        vmax = max_abs
-        vmin = -max_abs
-
-    norm = TwoSlopeNorm(vmin=vmin, vcenter=midpoint, vmax=vmax)
-
-    # style
-    plt.style.use('dark_background')
-    plt.figure(figsize=(10, 8), dpi=dpi)
-    plt.title(f"{operation} of {mode} vectors")
-    plt.imshow(matrix, cmap='RdBu_r', interpolation='none', norm=norm)
-    plt.colorbar(label=operation)
-    plt.xlabel('Locus')
-    plt.ylabel('Locus')
             
     plt.grid(False)
     plt.show()
