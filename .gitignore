@@ -2,3 +2,5 @@
 !genome_architecture_entropy/
 !README.md
 **/__pycache__
+genome_architecture_entropy/src/df_genome_scan_iza_ws4_inverse.csv
+genome_architecture_entropy/src/df_genome_scan_iza_ws4.csv
