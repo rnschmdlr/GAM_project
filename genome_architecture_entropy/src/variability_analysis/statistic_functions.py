@@ -74,3 +74,14 @@ def relative_error(mat1, mat2):
 def scale_matrix(mat):
     """Scale a matrix between 0 and 1."""
     return (mat - np.nanmin(mat)) / (np.nanmax(mat) - np.nanmin(mat))
+
+
+def differential_contacts(mat1, mat2):
+    """Calculate the differential contacts between two matrices."""
+    # Calculate zscores
+    zscores1 = (mat1 - np.nanmean(mat1)) / np.nanstd(mat1)
+    zscores2 = (mat2 - np.nanmean(mat2)) / np.nanstd(mat2)
+
+    # Calculate differential contacts
+    diff_contacts = np.abs(zscores1 - zscores2)
+    return diff_contacts
