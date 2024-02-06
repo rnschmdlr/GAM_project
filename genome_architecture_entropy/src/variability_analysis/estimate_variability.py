@@ -1,14 +1,10 @@
 import numpy as np
-import pandas as pd
 from itertools import combinations
 from scipy.spatial import distance
 from scipy.stats import skew, kurtosis, trim_mean, mstats
 from scipy.stats import norm as stats_norm
 from scipy.stats import mode as modus
-from mantichora import mantichora
-from atpbar import atpbar
-from tqdm.auto import tqdm
-from math import comb
+from multiprocessing import Pool
 import multiprocessing ;multiprocessing.set_start_method('fork', force=True)
 
 from entropy.shannon_entropies.compute_2d_entropies import shannon_entropy, shannon_entropy_axis
@@ -115,18 +111,15 @@ def calculate_wilson_interval(samples):
     
     for sample in range(len(samples)):
         data = samples[sample]
-        confidence_level = 0.95
         observed_probability = np.mean(data)
+        
+        if observed_probability >= 1:
+            return (1, 1)
+        
+        # Calculate Wilson Score Interval
+        confidence_level = 0.95
         n = len(data)
         z_score = stats_norm.ppf((1 + confidence_level) / 2)
-
-        # Check if observed_probability is 0 or 1
-        if observed_probability <= 0:
-            print('observed_probability <= 0')
-            return (0, 0)
-        elif observed_probability >= 1:
-            print('observed_probability >= 1')
-            return (1, 1)
         
         numerator = observed_probability + (z_score ** 2) / (2 * n)
         denominator = 1 + (z_score ** 2) / n
@@ -135,13 +128,13 @@ def calculate_wilson_interval(samples):
         lower_bound = (numerator - margin_of_error) / denominator
         upper_bound = (numerator + margin_of_error) / denominator
         
-        midpoint = np.mean([lower_bound, upper_bound])
+        midpoint = 1 - np.mean([lower_bound, upper_bound])
         interval_range = upper_bound - lower_bound
 
         midpoints.append(midpoint)
         interval_ranges.append(interval_range)
         
-    return midpoints, interval_ranges
+    return (midpoints, interval_ranges)
 
 
 def wilson_score_interval_bootstrapped(probabilities):
@@ -165,27 +158,37 @@ def wilson_score_interval_bootstrapped(probabilities):
     # Manual bootstrapping
     n_bootstrap = 100
     size = 20
-    bootstrap_samples = [np.random.choice(probabilities, size=size, replace=True) for _ in range(n_bootstrap)]
+    if len(np.unique(probabilities)) == 1:
+        if np.unique(probabilities)[0] == 0:
+            # If all probabilities are zero, there are no valid intervals to calculate
+            return (np.nan, np.nan)
+        # If there's only one non-zero unique element in probabilities, replicate it
+        bootstrap_samples = np.full((n_bootstrap, size), probabilities[0])
+    else:
+        # Otherwise, perform bootstrap sampling
+        bootstrap_samples = np.random.choice(probabilities, size=(n_bootstrap, size), replace=True)
     
-    # Calculate Wilson Score Interval for each bootstrap sample iteratevely
-    #intervals = [calculate_wilson_interval(sample) for sample in bootstrap_samples]
+    # Calculate Wilson score interval for each bootstrap sample
+    result = calculate_wilson_interval(bootstrap_samples)
 
-    # parallelized version
-    n_cores = 4
-    with mantichora(nworkers=n_cores) as mcore:
-        for i in range(n_cores):
-            mcore.run(calculate_wilson_interval,# 'task %d' % (i+1), 
-                      bootstrap_samples[int(n_bootstrap / n_cores) * i: int(n_bootstrap / n_cores) * (i+1)])
-        results = mcore.returns()
     # join results
-    intervals = []
-    for result in results:
-        intervals.extend(result)
-    arr = np.array(intervals)
+    midpoints = []
+    ranges = []
+    #for result in results:
+    if isinstance(result[0], list):
+        midpoints.extend(result[0])
+    else:
+        midpoints.append(result[0])
+    if isinstance(result[1], list):
+        ranges.extend(result[1])
+    else:
+        ranges.append(result[1])
+    
+    # Convert to numpy arrays
+    midpoints = np.array(midpoints)
+    ranges = np.array(ranges)
 
-    # Separate the lists and take their averages
-    midpoints = arr[::2].flatten()
-    ranges = arr[1::2].flatten()
+    # Calculate averages
     avg_midpoint = np.mean(midpoints)
     avg_interval_range = np.mean(ranges)
 
@@ -217,29 +220,34 @@ def calculate_entropy(matrix, pair):
     return entropy
 
 
+def calculate_probs(i, j, matrix, npmi_mat):
+    probs, n_samples, *_ = calculate_probability(matrix, (i, j), npmi_mat)
+    avg_midpoint, avg_interval_range = wilson_score_interval_bootstrapped(np.atleast_1d(probs))
+    return i, j, probs, avg_interval_range, avg_midpoint, n_samples
 
-def calculate_all_pairs(matrix, mode='probability', npmi_mat=None):
+
+def calculate_probs_mat(matrix, npmi_mat=None):
     num_loci = matrix.shape[0]
-    all_pairs = {}
-    ranges = {}
-    midpoints = {}
-    samples = {}
-    probs = 0
+    probs_mat = [[[] for _ in range(num_loci)] for _ in range(num_loci)]
+    ranges_mat = np.zeros((num_loci, num_loci))
+    midpoints_mat = np.zeros((num_loci, num_loci))
+    n_samples_mat = np.zeros((num_loci, num_loci))
 
-    # Iterate over all possible pairs of loci (upper triangle)
-    total = comb(num_loci, 2)
-    for pair in tqdm(combinations(range(num_loci), 2), total=total):
-        if mode == 'probability':
-            probs, n_samples, *_ = calculate_probability(matrix, pair, npmi_mat)
-            avg_midpoint, avg_interval_range = wilson_score_interval_bootstrapped(np.atleast_1d(probs))
-        if mode == 'entropy':
-            probs = calculate_entropy(matrix, pair)
-        all_pairs[pair] = probs
-        ranges[pair] = avg_interval_range
-        midpoints[pair] = avg_midpoint
-        samples[pair] = n_samples
+    # Create a pool of workers
+    with Pool() as pool:
+        # Generate all pairs of loci
+        pairs = list(combinations(range(num_loci), 2))
+        # Calculate probabilities in parallel
+        results = pool.starmap(calculate_probs, [(i, j, matrix, npmi_mat) for i, j in pairs])
 
-    return all_pairs, ranges, midpoints, samples
+    # Assign results
+    for i, j, probs, avg_interval_range, avg_midpoint, n_samples in results:
+        probs_mat[i][j] = probs
+        ranges_mat[i, j] = avg_interval_range
+        midpoints_mat[i, j] = avg_midpoint
+        n_samples_mat[i, j] = n_samples
+
+    return probs_mat, ranges_mat, midpoints_mat, n_samples_mat
 
 
 def reduce(vector, operation, trim=0.25):
