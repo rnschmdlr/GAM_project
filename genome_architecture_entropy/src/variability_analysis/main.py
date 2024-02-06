@@ -40,7 +40,7 @@ def npmi_wrapper(matrix):
 
 def get_prob_vectors(loci_pairs_to_extract, prob_dict):
     """Get specific probability vectors based on loci pair numbers from a dictionary."""
-    return [prob_dict[pair] for pair in loci_pairs_to_extract]
+    return [prob_dict[pair[0]][pair[1]] for pair in loci_pairs_to_extract]
 
 
 def select_interesting_pairs(data, num_each=3):
@@ -91,7 +91,7 @@ matrix = np.array([[0, 1, 0, 1],
 pair = (1, 3)
 
 #print(calculate_probability(matrix, pair))
-all_pair_probabilities = vrb.calculate_all_pairs(matrix)
+all_pair_probabilities = vrb.calculate_probs_mat(matrix)
 
 # For each pair, print the probabilities
 for pair, probabilities in all_pair_probabilities.items():
@@ -204,26 +204,13 @@ plot.variability(npmi_RE, 'Relative error (P, M)', 'Relative error', ratio=True)
 
 # %% Calculate all pairwise co-separation probabilities
 '''Calculate all pairwise co-separation probabilities'''
-all_pairs, ranges, midpoints, samples = vrb.calculate_all_pairs(seg_mat_combined, 'probability', npmi_combined)
+probs_mat, ranges_mat, midpoints_mat, n_samples_mat = vrb.calculate_probs_mat(seg_mat_combined, npmi_combined)
 
-n_loci = all_pairs[max(all_pairs.keys())].shape[0]
-samples_mat = np.zeros((n_loci, n_loci))
-midpoints_mat = np.zeros((n_loci, n_loci))
-ranges_mat = np.zeros((n_loci, n_loci)) 
-
-for pair in all_pairs:
-    rang = ranges[pair]
-    mid = midpoints[pair]
-    n_samples = samples[pair]
-    samples_mat[pair[0], pair[1]] = n_samples
-    midpoints_mat[pair[0], pair[1]] = mid
-    ranges_mat[pair[0], pair[1]] = rang
-
-plot.variability(samples_mat, "Number of samples with <50% overlap", "# slices", ratio=True, vmin=0)
+plot.variability(n_samples_mat, "Number of samples with <50% overlap", "# slices", ratio=True, vmin=0)
 # The interval midpoints are estimates of the true probability of co-separation for each pair
-plot.variability(midpoints_mat, "Bootstrapped Wilson score confidence interval", "midpoint")
+plot.variability(midpoints_mat, "Bootstrapped Wilson score", "midpoint")
 # The interval in which the true probability lies with 95% confidence is given by the interval [midpoint - range/2, midpoint + range/2]
-plot.variability(ranges_mat, "Bootstrapped Wilson score confidence interval", "range")
+plot.variability(ranges_mat, "Bootstrapped Wilson score range", "range")
 
 
 
@@ -268,13 +255,13 @@ for m, (name, operation) in enumerate(operations.items()):
     #for i, (label, model) in enumerate(models.items()):
     #    all_matrices[i] = reduce_all(model, operation, mode)
     if operation == 'cv' or operation == 'skewness':
-        vmax = np.nanmax(vrb.reduce_all(all_pairs, operation)) # np.nanpercentile(all_matrices, 99)
+        vmax = np.nanmax(vrb.reduce_all(probs_mat, operation)) # np.nanpercentile(all_matrices, 99)
         
     for i, (label, model) in enumerate(models.items()):
         if operation == 'cv' or operation == 'skewness':
-            var_matrix = vmax - vrb.reduce_all(all_pairs, operation)
+            var_matrix = vmax - vrb.reduce_all(probs_mat, operation)
         else:
-            var_matrix = vrb.reduce_all(all_pairs, operation)
+            var_matrix = vrb.reduce_all(probs_mat, operation)
         #plot.variability(e2d.npmi_2d_fast(model.astype(int), model.astype(int)), label, 'NPMI', None, 1, 0)
         #plot.variability(var_matrix, f"Dataset {label} {mode} vectors", name, vmax=np.nanpercentile(var_matrix, 99))
         plot.variability(var_matrix, f"Dataset {label}: variability approximation", name, center=0, ratio=True)
@@ -387,16 +374,12 @@ plt.show()
 
 # %% Visualize distribution in selected probability vectors
 """Visualize distribution in selected probability vectors"""
-mode = 'probability'
-operation = 'mean'
-var_matrix = vrb.reduce_all(all_pairs, operation)
-
 # set matrix values to 0 based on number of samples or confidence interval ranges
-filtered_var_matrix = var_matrix.copy()
+filtered_midpoints_mat = midpoints_mat.copy()
 #med_samples = np.nanpercentile(samples_mat, 25)
-#filtered_var_matrix[samples_mat > med_samples] = 0
+#filtered_midpoints_mat[samples_mat > med_samples] = 0
 #med_range = np.percentile(ranges_mat[ranges_mat!=0], 75)
-#filtered_var_matrix[ranges_mat > med_range] = 0
+#filtered_midpoints_mat[ranges_mat > med_range] = 0
 
 # specify pairs manually
 #interesting_pairs = [(11, 58), (34, 73), (18,58), (43, 64), (46, 62), (4, 26), (70, 72), (40, 41), (2, 3)] # chr3 88
@@ -404,25 +387,26 @@ filtered_var_matrix = var_matrix.copy()
 #interesting_pairs =[(0,1), (2,3)]#, (40,41)]
 
 # get pairs from variability analysis, convert to tuples and sort each tuple
-interesting_pairs = select_interesting_pairs(np.abs(standardized_diff), 8)
+interesting_pairs = select_interesting_pairs(midpoints_mat, 8)
 
-#plot.variability(var_matrix, "Dataset C: variability approximation", operation, vmax=np.nanpercentile(var_matrix**5, 99.5), ratio=True, center=0)
-plot.variability(filtered_var_matrix, f"Dataset C: variability approximation", operation, interesting_pairs)
+#plot.variability(midpoints_mat, "Dataset C: variability approximation", operation, vmax=np.nanpercentile(midpoints_mat**5, 99.5), ratio=True, center=0)
+plot.variability(filtered_midpoints_mat, f"Dataset C: variability approximation", 'Wilson', interesting_pairs)
 #plot.variability(npmi_RE, 'Relative error (P, M)', 'Relative error', interesting_pairs, ratio=True, center=0)
 
 # get vectors of selected pairs and plot their distributions
-#all_pairs_dict = calculate_all_pairs(dataset, mode)
-vectors = get_prob_vectors(interesting_pairs, all_pairs)
+#probs_mat_dict = calculate_probs_mat(dataset, mode)
+vectors = get_prob_vectors(interesting_pairs, probs_mat)
 
 labels = [f"L {x}, {y}" for x, y in interesting_pairs]
-colors = plot.get_pair_colors(var_matrix, interesting_pairs)
-centers = [vrb.reduce(vector, operation) for vector in vectors]
+colors = plot.get_pair_colors(midpoints_mat, interesting_pairs)
+#centers = [vrb.reduce(vector, operation) for vector in vectors]
+centers = [midpoints_mat[pair] for pair in interesting_pairs]
 
 # scale npmi_ratio between 0 and 1
 #standardized_npmi_RE = standardize_vector(npmi_RE.flatten()).reshape(npmi_RE.shape)
-npmi_RE_flat = np.clip(np.nan_to_num(npmi_RE).flatten(), a_min = 0, a_max=None) + 1
-log_trans_npmi_RE = np.log(np.log(npmi_RE_flat+1)).reshape(npmi_RE.shape)
-npmi_RE_norm = statfx.scale_matrix(log_trans_npmi_RE)
+#npmi_RE_flat = np.clip(np.nan_to_num(npmi_RE).flatten(), a_min = 0, a_max=None) + 1
+#log_trans_npmi_RE = np.log(np.log(npmi_RE_flat+1)).reshape(npmi_RE.shape)
+#npmi_RE_norm = statfx.scale_matrix(log_trans_npmi_RE)
 #npmi_diff = (npmi_diff - np.nanmin(npmi_diff)) / (np.nanmax(npmi_diff) - np.nanmin(npmi_diff))
 
 # get npmi values for each pair
@@ -432,15 +416,15 @@ npmi_com_pairs = []
 npmi_pm_ratios = []
 npmi_pm_diffs = []
 mids=[]
-for pair in interesting_pairs:
+#for pair in interesting_pairs:
     #npmi_mat_pairs.append(npmi_maternal[pair[0], pair[1]])
     #npmi_pat_pairs.append(npmi_paternal[pair[0], pair[1]])
     #npmi_com_pairs.append(npmi_combined[pair[0], pair[1]])
-    npmi_pm_ratios.append(npmi_RE_norm[pair[0], pair[1]])
+    #npmi_pm_ratios.append(npmi_RE_norm[pair[0], pair[1]])
     #npmi_pm_diffs.append(npmi_diff[pair[0], pair[1]])
     #mids.append(midpoints[pair])
 
-plot.ridge(vectors, centers, 'Weighted probability of locus to loci-pair co-separation', labels, colors, None, None, None, npmi_pm_ratios)
+plot.ridge(vectors, centers, 'Weighted probability of locus to loci-pair co-separation', labels, colors, None, None, None, None)
 
 
 
