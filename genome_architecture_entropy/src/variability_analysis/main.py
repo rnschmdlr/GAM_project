@@ -1,18 +1,22 @@
 # %% Imports and helper function definitons
 """Imports and helper function definitons"""
 import os
-os.chdir('/Users/pita/Documents/Rene/GAM_project/genome_architecture_entropy/src/')
-
+import sys
 import numpy as np
 import pandas as pd
 from scipy.stats import spearmanr
 from tqdm.auto import tqdm
 
-import variability_analysis.estimate_variability as vrb
-import variability_analysis.plotting as plot
-import variability_analysis.statistic_functions as statfx
-import entropy.shannon_entropies.compute_2d_entropies as e2d
+# makes absolute imports possible for interactive use in different environments
+# $ export GAE_PACKAGE_PATH=/path/to/genome_architecture_entropy
+package_path = os.getenv('GAE_PACKAGE_PATH')
+sys.path.insert(0, package_path) 
 
+from src.variability_analysis import estimate_variability as vrb
+from src.variability_analysis import plotting as plot
+from src.variability_analysis import statistic_functions as statfx
+from src.entropy.shannon_entropies import compute_2d_entropies as e2d
+from src.variability_analysis import scan_single_genome
 
 
 def select_region(data, chr, xmb, ymb, size, res_kb=50):
@@ -130,18 +134,20 @@ plot.contact_map(npmi_wrapper(seg_mats_D))
 
 
 # %% Load experimental dataset
-"""Load experimental dataset"""""
-path = '/Users/pita/Documents/Rene/GAM_project/genome_architecture_entropy/data/experimental/'
+"""Load experimental dataset"""
+data_path = os.path.join(package_path, 'data/experimental/')
 
-#data_unphased = path + 'F123.all.as.3NPs.mm10.curated.segregation_at50000.passed_qc_fc5_cw6_s11.table'
+#data_unphased = os.path.join(data_path, 'F123.all.as.3NPs.mm10.curated.segregation_at50000.passed_qc_fc5_cw6_s11.table')
 #seg_table_unphased = pd.read_table(data_unphased)
 
-data_paternal = path + 'F123.All.as.3NPs.mm10.curated.CAST.segregation_at50000.passed_qc_fc5_cw6_s11.table'
-seg_table_paternal = pd.read_table(data_paternal)
+#data_paternal = os.path.join(data_path, 'F123.All.as.3NPs.mm10.curated.CAST.segregation_at50000.passed_qc_fc5_cw6_s11.table')
+#seg_table_paternal = pd.read_table(data_paternal)
 
-data_maternal = path + 'F123.All.as.3NPs.mm10.curated.S129.segregation_at50000.passed_qc_fc5_cw6_s11.table'
-seg_table_maternal = pd.read_table(data_maternal)
+#data_maternal = os.path.join(data_path, 'F123.All.as.3NPs.mm10.curated.S129.segregation_at50000.passed_qc_fc5_cw6_s11.table')
+#seg_table_maternal = pd.read_table(data_maternal)
 
+data_iza = os.path.join(data_path, 'Curated_GAM_mESCs_46C_real_1NP_at50000.passed_qc_fc5_cw6_s11.table')
+seg_table_iza = pd.read_table(data_iza)
 
 
 # %% Specify region and plot npmi contact map
@@ -211,6 +217,43 @@ plot.variability(n_samples_mat, "Number of samples with <50% overlap", "# slices
 plot.variability(midpoints_mat, "Bootstrapped Wilson score", "midpoint")
 # The interval in which the true probability lies with 95% confidence is given by the interval [midpoint - range/2, midpoint + range/2]
 plot.variability(ranges_mat, "Bootstrapped Wilson score range", "range")
+
+
+
+# %% Chromosome variability
+'''Chromosome variability'''
+df_genome = scan_single_genome.chromosome_variability(seg_table_iza, 2, res_kb=50)
+results_path = os.path.join(package_path, 'results/variability/genome_scans/')
+df_genome.to_csv(os.path.join(results_path, 'df_genome_scan_iza_ws2_inverse.csv'), index=False)
+#df_genome = pd.read_csv('df_genome_scan_iza_ws4.csv')
+
+df_genome.groupby('Chr').mean()
+#df_genome = df_genome[df_genome['Variability est.'] > 0]
+
+# violin plots for each chromosome
+import seaborn as sns
+import matplotlib.pyplot as plt
+plt.figure(figsize=(15, 6))
+sns.violinplot(x='Chr', y='Variability est.', data=df_genome)
+plt.xticks(rotation=90)
+plt.ylim(0.25, 0.4)
+plt.ylabel('Estimated variability %')
+plt.xlabel('Chromosome')
+
+# boxplots for each chromosome
+plt.figure(figsize=(15, 6))
+sns.boxplot(x='Chr', y='Variability est.', data=df_genome[df_genome['Variability est.'] > 0], flierprops={"marker": "x"})
+plt.xticks(rotation=90)
+plt.ylim(0.24, 0.36)
+plt.ylabel('Estimated variability %')
+plt.xlabel('Chromosome')
+
+# significance test between chrX and all other chromosomes
+from scipy.stats import mannwhitneyu
+chrX = df_genome[df_genome['Chr'] == 'chrX']['Variability est.']
+for chr in df_genome['Chr'].unique():
+    if chr != 'chrX':
+        print(chr, mannwhitneyu(chrX, df_genome[df_genome['Chr'] == chr]['Variability est.']))
 
 
 
