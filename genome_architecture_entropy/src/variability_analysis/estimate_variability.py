@@ -7,8 +7,8 @@ from scipy.stats import mode as modus
 from multiprocessing import Pool
 import multiprocessing ;multiprocessing.set_start_method('fork', force=True)
 
-from entropy.shannon_entropies.compute_2d_entropies import shannon_entropy, shannon_entropy_axis
-from variability_analysis.statistic_functions import gini_coefficient
+from src.entropy.shannon_entropies.compute_2d_entropies import shannon_entropy, shannon_entropy_axis
+from src.variability_analysis.statistic_functions import gini_coefficient
 
 
 
@@ -115,6 +115,8 @@ def calculate_wilson_interval(samples):
         
         if observed_probability >= 1:
             return (1, 1)
+        if observed_probability <= 0:
+            return (np.nan, np.nan)
         
         # Calculate Wilson Score Interval
         confidence_level = 0.95
